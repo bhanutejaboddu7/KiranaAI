@@ -40,3 +40,8 @@ export const uploadVisionImage = async (file, type = 'ocr') => {
     });
     return response.data;
 };
+
+export const importInventory = async (products) => {
+    const response = await api.post('/inventory/bulk', products);
+    return response.data;
+};
