@@ -17,66 +17,79 @@ const Layout = ({ children }) => {
     ];
 
     return (
-        <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="flex h-screen bg-gray-50 dark:bg-gray-900 font-sans">
             {/* Mobile Sidebar Overlay */}
             {isSidebarOpen && (
                 <div
-                    className="fixed inset-0 bg-black/50 z-40 md:hidden"
+                    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden transition-opacity"
                     onClick={() => setIsSidebarOpen(false)}
                 />
             )}
 
             {/* Sidebar */}
             <div className={cn(
-                "fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-transform duration-200 ease-in-out md:relative md:translate-x-0",
+                "fixed inset-y-0 left-0 z-50 w-72 bg-gradient-to-b from-primary to-indigo-900 text-white shadow-2xl transition-transform duration-300 ease-out md:relative md:translate-x-0",
                 isSidebarOpen ? "translate-x-0" : "-translate-x-full"
             )}>
-                <div className="p-6 flex items-center justify-between">
-                    <h1 className="text-2xl font-bold text-primary flex items-center gap-2">
-                        <Store className="w-8 h-8" />
+                <div className="p-8 flex items-center justify-between">
+                    <h1 className="text-3xl font-extrabold tracking-tight flex items-center gap-3 text-white">
+                        <Store className="w-8 h-8 text-secondary" />
                         KiranaAI
                     </h1>
                     <button
                         onClick={() => setIsSidebarOpen(false)}
-                        className="md:hidden p-1 hover:bg-gray-100 rounded-lg"
+                        className="md:hidden p-2 hover:bg-white/10 rounded-full transition-colors"
                     >
                         <X size={24} />
                     </button>
                 </div>
-                <nav className="px-4 space-y-2">
+                <nav className="px-6 space-y-3">
                     {navItems.map((item) => (
                         <Link
                             key={item.path}
                             to={item.path}
                             onClick={() => setIsSidebarOpen(false)}
                             className={cn(
-                                "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
+                                "flex items-center gap-4 px-6 py-4 rounded-xl transition-all duration-200 group",
                                 location.pathname === item.path
-                                    ? "bg-primary text-primary-foreground"
-                                    : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                    ? "bg-white text-primary shadow-lg font-bold transform scale-105"
+                                    : "text-gray-100 hover:bg-white/10 hover:translate-x-1"
                             )}
                         >
-                            <item.icon className="w-5 h-5" />
-                            <span className="font-medium">{item.label}</span>
+                            <item.icon className={cn("w-6 h-6", location.pathname === item.path ? "text-primary" : "text-gray-300 group-hover:text-white")} />
+                            <span className="text-lg">{item.label}</span>
                         </Link>
                     ))}
                 </nav>
+
+                <div className="absolute bottom-8 left-0 right-0 px-6">
+                    <div className="bg-white/10 rounded-2xl p-4 backdrop-blur-md border border-white/10">
+                        <p className="text-xs text-gray-300 mb-1">Status</p>
+                        <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                            <span className="text-sm font-medium">System Online</span>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 overflow-auto flex flex-col">
+            <div className="flex-1 overflow-auto flex flex-col bg-gray-50/50">
                 {/* Mobile Header */}
-                <div className="md:hidden p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center gap-4 sticky top-0 z-30">
-                    <button
-                        onClick={() => setIsSidebarOpen(true)}
-                        className="p-2 hover:bg-gray-100 rounded-lg"
-                    >
-                        <Menu size={24} />
-                    </button>
-                    <h1 className="text-xl font-bold text-primary">KiranaAI</h1>
+                <div className="md:hidden p-4 bg-white/80 backdrop-blur-md border-b border-gray-200 sticky top-0 z-30 flex items-center justify-between shadow-sm">
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => setIsSidebarOpen(true)}
+                            className="p-2 hover:bg-gray-100 rounded-xl text-gray-700"
+                        >
+                            <Menu size={24} />
+                        </button>
+                        <h1 className="text-xl font-bold text-primary">KiranaAI</h1>
+                    </div>
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-secondary" />
                 </div>
 
-                <div className="p-4 md:p-8 max-w-7xl mx-auto w-full">
+                <div className="p-4 md:p-8 max-w-7xl mx-auto w-full animate-in fade-in duration-500">
                     {children}
                 </div>
             </div>
