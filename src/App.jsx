@@ -6,6 +6,7 @@ import Dashboard from './components/Dashboard';
 import StorekeeperView from './components/StorekeeperView';
 import CustomerView from './components/CustomerView';
 import StockManager from './components/StockManager';
+import ErrorBoundary from './components/ErrorBoundary';
 
 import { App as CapacitorApp } from '@capacitor/app';
 import { useNavigate } from 'react-router-dom';
@@ -48,7 +49,11 @@ function App() {
           <Route path="/" element={<ChatInterface messages={messages} setMessages={setMessages} />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/storekeeper" element={<StorekeeperView />} />
-          <Route path="/customer" element={<CustomerView />} />
+          <Route path="/customer" element={
+            <ErrorBoundary>
+              <CustomerView />
+            </ErrorBoundary>
+          } />
           <Route path="/stock" element={<StockManager />} />
         </Routes>
       </Layout>

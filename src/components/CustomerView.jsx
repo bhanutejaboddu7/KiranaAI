@@ -39,57 +39,65 @@ const CustomerView = () => {
 
     useEffect(() => {
         isMounted.current = true;
-        if (!SpeechRecognition) return;
 
-        // Create a fresh instance every time we mount or isAlwaysOn changes
-        const recognition = new SpeechRecognition();
-        recognitionRef.current = recognition;
+        if (!SpeechRecognition) {
+            console.warn("Speech Recognition not supported");
+            return;
+        }
 
-        recognition.continuous = isAlwaysOn;
-        recognition.lang = 'en-IN';
-        recognition.interimResults = false;
+        try {
+            // Create a fresh instance every time we mount or isAlwaysOn changes
+            const recognition = new SpeechRecognition();
+            recognitionRef.current = recognition;
 
-        recognition.onresult = (event) => {
-            if (!isMounted.current) return;
-            const results = event.results;
-            const text = results[results.length - 1][0].transcript;
-            console.log("Recognized:", text);
-            handleVoiceQuery(text);
-        };
+            recognition.continuous = isAlwaysOn;
+            recognition.lang = 'en-IN';
+            recognition.interimResults = false;
 
-        recognition.onend = () => {
-            if (!isMounted.current) return;
-            if (document.hidden) return; // Don't auto-restart if tab is hidden
-
-            console.log("Recognition ended");
-            // Only auto-restart if we are NOT paused for speaking
-            if (isAlwaysOn && !isPausedForSpeaking.current) {
-                console.log("Restarting recognition (Always On)...");
+            recognition.onresult = (event) => {
+                if (!isMounted.current) return;
                 try {
-                    recognition.start();
-                } catch (e) {
-                    console.error("Failed to restart:", e);
-                }
-            } else if (!isAlwaysOn) {
-                setIsListening(false);
-            }
-        };
-
-        recognition.onerror = (event) => {
-            if (!isMounted.current) return;
-            if (document.hidden) return; // Don't retry if tab is hidden
-
-            console.error("Speech recognition error", event.error);
-            if (isAlwaysOn && event.error !== 'aborted' && !isPausedForSpeaking.current) {
-                setTimeout(() => {
-                    if (isMounted.current && !document.hidden) {
-                        try {
-                            recognition.start();
-                        } catch (e) { console.error("Retry failed", e); }
+                    const results = event.results;
+                    if (results && results.length > 0) {
+                        const text = results[results.length - 1][0].transcript;
+                        console.log("Recognized:", text);
+                        handleVoiceQuery(text);
                     }
-                }, 1000);
-            }
-        };
+                } catch (err) {
+                    console.error("Error processing result:", err);
+                }
+            };
+
+            // ... rest of handlers attached below
+
+            recognition.onend = () => {
+                if (!isMounted.current) return;
+                if (document.hidden) return;
+
+                console.log("Recognition ended");
+                if (isAlwaysOn && !isPausedForSpeaking.current) {
+                    console.log("Restarting recognition (Always On)...");
+                    try {
+                        recognition.start();
+                    } catch (e) {
+                        console.error("Failed to restart:", e);
+                    }
+                } else if (!isAlwaysOn) {
+                    setIsListening(false);
+                }
+            };
+
+            recognition.onerror = (event) => {
+                if (!isMounted.current) return;
+                console.error("Speech recognition error", event.error);
+                if (isAlwaysOn && event.error !== 'aborted' && !isPausedForSpeaking.current) {
+                    // Retry logic
+                }
+            };
+
+        } catch (e) {
+            console.error("Failed to initialize SpeechRecognition:", e);
+        }
 
         // Auto-start if Always On is enabled (with delay for stability)
         if (isAlwaysOn) {

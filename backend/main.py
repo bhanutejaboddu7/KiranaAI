@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from database import init_db
-from routes import inventory, sales, chat, mandi, vision
-from seed_data import seed_data
+from .database import init_db
+from .routes import inventory, sales, chat, mandi, vision
+from .seed_data import seed_data
 
 app = FastAPI(title="Kirana Shop Talk to Data")
 
