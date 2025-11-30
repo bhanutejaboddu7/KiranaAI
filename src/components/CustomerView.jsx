@@ -95,22 +95,22 @@ const CustomerView = () => {
                 }
             };
 
+            // Auto-start if Always On is enabled (with delay for stability)
+            if (isAlwaysOn) {
+                setTimeout(() => {
+                    if (isMounted.current && !document.hidden) {
+                        try {
+                            recognition.start();
+                            setIsListening(true);
+                        } catch (e) {
+                            console.error("Failed to auto-start:", e);
+                        }
+                    }
+                }, 500);
+            }
+
         } catch (e) {
             console.error("Failed to initialize SpeechRecognition:", e);
-        }
-
-        // Auto-start if Always On is enabled (with delay for stability)
-        if (isAlwaysOn) {
-            setTimeout(() => {
-                if (isMounted.current && !document.hidden) {
-                    try {
-                        recognition.start();
-                        setIsListening(true);
-                    } catch (e) {
-                        console.error("Failed to auto-start:", e);
-                    }
-                }
-            }, 500);
         }
 
         return () => {
