@@ -45,11 +45,9 @@ const CustomerView = () => {
             return;
         }
 
-        let recognition = null;
-
         try {
             // Create a fresh instance every time we mount or isAlwaysOn changes
-            recognition = new SpeechRecognition();
+            const recognition = new SpeechRecognition();
             recognitionRef.current = recognition;
 
             recognition.continuous = isAlwaysOn;
@@ -80,7 +78,7 @@ const CustomerView = () => {
                 if (isAlwaysOn && !isPausedForSpeaking.current) {
                     console.log("Restarting recognition (Always On)...");
                     try {
-                        recognition.start();
+                        recognitionRef.current?.start();
                     } catch (e) {
                         console.error("Failed to restart:", e);
                     }
@@ -102,13 +100,12 @@ const CustomerView = () => {
                 setTimeout(() => {
                     if (isMounted.current && !document.hidden) {
                         try {
-                            // Double check if recognition instance exists
+                            // Double check if recognition instance exists using REF
                             if (recognitionRef.current) {
                                 recognitionRef.current.start();
                                 setIsListening(true);
                             } else {
                                 console.warn("Recognition instance lost, recreating...");
-                                // Fallback: force re-render or handle gracefully
                                 setIsAlwaysOn(false);
                             }
                         } catch (e) {
