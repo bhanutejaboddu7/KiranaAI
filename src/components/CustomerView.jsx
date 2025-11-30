@@ -45,9 +45,11 @@ const CustomerView = () => {
             return;
         }
 
+        let recognition = null;
+
         try {
             // Create a fresh instance every time we mount or isAlwaysOn changes
-            const recognition = new SpeechRecognition();
+            recognition = new SpeechRecognition();
             recognitionRef.current = recognition;
 
             recognition.continuous = isAlwaysOn;
