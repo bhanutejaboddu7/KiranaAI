@@ -1,0 +1,59 @@
+import React from 'react';
+import { HashRouter as Router, Routes, Route } from 'react-router-dom';
+import Layout from './components/Layout';
+import ChatInterface from './components/ChatInterface';
+import Dashboard from './components/Dashboard';
+import StorekeeperView from './components/StorekeeperView';
+import CustomerView from './components/CustomerView';
+import StockManager from './components/StockManager';
+
+import { App as CapacitorApp } from '@capacitor/app';
+import { useNavigate } from 'react-router-dom';
+
+const DeepLinkHandler = () => {
+  const navigate = useNavigate();
+
+  React.useEffect(() => {
+    CapacitorApp.addListener('appUrlOpen', (data) => {
+      console.log('App opened with URL:', data.url);
+      try {
+        const url = new URL(data.url);
+        // Check for kiranaai://query?q=...
+        if (url.host === 'query') {
+          const query = url.searchParams.get('q');
+          if (query) {
+            console.log('Navigating to customer view with query:', query);
+            navigate('/customer', { state: { autoQuery: query } });
+          }
+        }
+      } catch (e) {
+        console.error('Error parsing deep link:', e);
+      }
+    });
+  }, [navigate]);
+
+  return null;
+};
+
+function App() {
+  const [messages, setMessages] = React.useState([
+    { role: 'assistant', content: 'Hello! I can help you analyze your shop data. Ask me questions like "How much rice do we have?" or "What are the total sales today?"' }
+  ]);
+
+  return (
+    <Router>
+      <DeepLinkHandler />
+      <Layout>
+        <Routes>
+          <Route path="/" element={<ChatInterface messages={messages} setMessages={setMessages} />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/storekeeper" element={<StorekeeperView />} />
+          <Route path="/customer" element={<CustomerView />} />
+          <Route path="/stock" element={<StockManager />} />
+        </Routes>
+      </Layout>
+    </Router>
+  );
+}
+
+export default App;

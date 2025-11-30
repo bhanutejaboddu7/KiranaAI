@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">KiranaAI</string>
+    <string name="title_activity_main">KiranaAI</string>
+    <string name="package_name">com.kiranaai.app</string>
+    <string name="custom_url_scheme">com.kiranaai.app</string>
+</resources>
