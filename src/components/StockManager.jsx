@@ -33,6 +33,13 @@ const StockManager = () => {
         }
     };
 
+    const ocrInputRef = React.useRef(null);
+    const shelfInputRef = React.useRef(null);
+
+    const triggerFileInput = (ref) => {
+        ref.current?.click();
+    };
+
     return (
         <div className="p-4 space-y-8 pb-20">
             <h1 className="text-2xl font-bold mb-4">Stock Management</h1>
@@ -45,17 +52,22 @@ const StockManager = () => {
                 <p className="text-sm text-gray-500 mb-4">Upload a photo of the distributor's bill to automatically update inventory.</p>
 
                 <div className="flex gap-4">
-                    <label className="flex-1 flex flex-col items-center justify-center h-32 border-2 border-dashed border-blue-300 rounded-lg cursor-pointer hover:bg-blue-50 bg-blue-50/30">
+                    <button
+                        onClick={() => triggerFileInput(ocrInputRef)}
+                        className="flex-1 flex flex-col items-center justify-center h-32 border-2 border-dashed border-blue-300 rounded-lg cursor-pointer hover:bg-blue-50 bg-blue-50/30"
+                    >
                         <Camera className="w-8 h-8 text-blue-500 mb-2" />
                         <p className="text-sm text-blue-600 font-medium">Take Photo</p>
-                        <input
-                            type="file"
-                            className="hidden"
-                            accept="image/*"
-                            capture="environment"
-                            onChange={(e) => handleFileUpload(e, 'ocr')}
-                        />
-                    </label>
+                    </button>
+                    <input
+                        ref={ocrInputRef}
+                        type="file"
+                        className="hidden"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={(e) => handleFileUpload(e, 'ocr')}
+                    />
+
                     <label className="flex-1 flex flex-col items-center justify-center h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
                         <Upload className="w-8 h-8 text-gray-400 mb-2" />
                         <p className="text-sm text-gray-500">Upload File</p>
@@ -96,17 +108,22 @@ const StockManager = () => {
                 <p className="text-sm text-gray-500 mb-4">Take a picture of the shelf to update product locations.</p>
 
                 <div className="flex gap-4">
-                    <label className="flex-1 flex flex-col items-center justify-center h-32 border-2 border-dashed border-blue-300 rounded-lg cursor-pointer hover:bg-blue-50 bg-blue-50/30">
+                    <button
+                        onClick={() => triggerFileInput(shelfInputRef)}
+                        className="flex-1 flex flex-col items-center justify-center h-32 border-2 border-dashed border-blue-300 rounded-lg cursor-pointer hover:bg-blue-50 bg-blue-50/30"
+                    >
                         <Camera className="w-8 h-8 text-blue-500 mb-2" />
                         <p className="text-sm text-blue-600 font-medium">Take Photo</p>
-                        <input
-                            type="file"
-                            className="hidden"
-                            accept="image/*"
-                            capture="environment"
-                            onChange={(e) => handleFileUpload(e, 'shelf')}
-                        />
-                    </label>
+                    </button>
+                    <input
+                        ref={shelfInputRef}
+                        type="file"
+                        className="hidden"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={(e) => handleFileUpload(e, 'shelf')}
+                    />
+
                     <label className="flex-1 flex flex-col items-center justify-center h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
                         <Upload className="w-8 h-8 text-gray-400 mb-2" />
                         <p className="text-sm text-gray-500">Upload File</p>

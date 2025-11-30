@@ -100,8 +100,15 @@ const CustomerView = () => {
                 setTimeout(() => {
                     if (isMounted.current && !document.hidden) {
                         try {
-                            recognition.start();
-                            setIsListening(true);
+                            // Double check if recognition instance exists
+                            if (recognitionRef.current) {
+                                recognitionRef.current.start();
+                                setIsListening(true);
+                            } else {
+                                console.warn("Recognition instance lost, recreating...");
+                                // Fallback: force re-render or handle gracefully
+                                setIsAlwaysOn(false);
+                            }
                         } catch (e) {
                             console.error("Failed to auto-start:", e);
                         }
