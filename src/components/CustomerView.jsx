@@ -39,13 +39,17 @@ const CustomerView = () => {
             recognition.interimResults = false;
 
             recognition.onresult = (event) => {
+                if (!isMounted.current) return;
                 const text = event.results[0][0].transcript;
                 setInput(text);
                 handleSend(null, text); // Auto-send on voice end
             };
 
-            recognition.onend = () => setIsListening(false);
+            recognition.onend = () => {
+                if (isMounted.current) setIsListening(false);
+            };
             recognition.onerror = (event) => {
+                if (!isMounted.current) return;
                 console.error("Speech error:", event.error);
                 setIsListening(false);
             };
@@ -55,7 +59,11 @@ const CustomerView = () => {
 
         return () => {
             isMounted.current = false;
-            if (recognitionRef.current) recognitionRef.current.abort();
+            try {
+                if (recognitionRef.current) recognitionRef.current.abort();
+            } catch (e) {
+                console.error("Error aborting recognition:", e);
+            }
             window.speechSynthesis.cancel();
         };
     }, []);
@@ -85,8 +93,12 @@ const CustomerView = () => {
         if ('speechSynthesis' in window) {
             window.speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(text);
-            utterance.onstart = () => setIsSpeaking(true);
-            utterance.onend = () => setIsSpeaking(false);
+            utterance.onstart = () => {
+                if (isMounted.current) setIsSpeaking(true);
+            };
+            utterance.onend = () => {
+                if (isMounted.current) setIsSpeaking(false);
+            };
             window.speechSynthesis.speak(utterance);
         }
     };
@@ -107,15 +119,19 @@ const CustomerView = () => {
             const history = messages.map(m => ({ role: m.role, content: m.content }));
 
             const data = await chatWithData(text, history);
+            if (!isMounted.current) return;
+
             const botMsg = { role: 'assistant', content: data.response };
 
             setMessages(prev => [...prev, botMsg]);
             speakResponse(data.response); // Auto-speak response in this mode
         } catch (error) {
             console.error(error);
-            setMessages(prev => [...prev, { role: 'assistant', content: "Sorry, I had trouble connecting to the server." }]);
+            if (isMounted.current) {
+                setMessages(prev => [...prev, { role: 'assistant', content: "Sorry, I had trouble connecting to the server." }]);
+            }
         } finally {
-            setIsLoading(false);
+            if (isMounted.current) setIsLoading(false);
         }
     };
 

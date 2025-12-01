@@ -44,19 +44,17 @@ function App() {
   return (
     <Router>
       <DeepLinkHandler />
-      <Layout>
-        <Routes>
-          <Route path="/" element={<ChatInterface messages={messages} setMessages={setMessages} />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/storekeeper" element={<StorekeeperView />} />
-          <Route path="/customer" element={
-            <ErrorBoundary>
-              <CustomerView />
-            </ErrorBoundary>
-          } />
-          <Route path="/stock" element={<StockManager />} />
-        </Routes>
-      </Layout>
+      <ErrorBoundary>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<ChatInterface messages={messages} setMessages={setMessages} />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/storekeeper" element={<StorekeeperView />} />
+            <Route path="/customer" element={<CustomerView />} />
+            <Route path="/stock" element={<StockManager />} />
+          </Routes>
+        </Layout>
+      </ErrorBoundary>
     </Router>
   );
 }
