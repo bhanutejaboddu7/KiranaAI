@@ -55,92 +55,60 @@ const ChatInterface = ({ messages, setMessages }) => {
     };
 
     return (
-        <div className="flex flex-col h-[calc(100vh-8rem)] bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="flex flex-col h-[calc(100vh-8rem)] bg-slate-900 rounded-xl shadow-sm border border-slate-700 overflow-hidden">
             {/* Messages Area */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {messages.map((msg, index) => (
                     <div
                         key={index}
                         className={cn(
-                            "flex gap-3 max-w-[80%]",
+                            "flex gap-3 max-w-[85%]",
                             msg.role === 'user' ? "ml-auto flex-row-reverse" : ""
                         )}
                     >
                         <div className={cn(
-                            "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
-                            msg.role === 'user' ? "bg-primary text-primary-foreground" : "bg-green-100 text-green-700"
+                            "w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-md",
+                            msg.role === 'user' ? "bg-blue-600 text-white" : "bg-slate-700 text-blue-300"
                         )}>
-                            {msg.role === 'user' ? <User size={18} /> : <Bot size={18} />}
+                            {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
                         </div>
 
                         <div className={cn(
-                            "p-3 rounded-lg text-sm",
+                            "p-3 rounded-2xl text-sm shadow-md",
                             msg.role === 'user'
-                                ? "bg-primary text-primary-foreground rounded-tr-none"
-                                : "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-tl-none"
+                                ? "bg-blue-600 text-white rounded-tr-none"
+                                : "bg-slate-800 text-slate-200 rounded-tl-none border border-slate-700"
                         )}>
-                            <div className="prose prose-sm dark:prose-invert max-w-none">
+                            <div className="prose prose-sm prose-invert max-w-none">
                                 <ReactMarkdown
                                     remarkPlugins={[remarkGfm]}
                                     rehypePlugins={[rehypeHighlight]}
                                     components={{
                                         table: ({ node, ...props }) => (
-                                            <div className="overflow-x-auto my-4 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
-                                                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700" {...props} />
+                                            <div className="overflow-x-auto my-2 rounded border border-slate-600 bg-slate-900/50">
+                                                <table className="min-w-full divide-y divide-slate-700" {...props} />
                                             </div>
                                         ),
-                                        thead: ({ node, ...props }) => (
-                                            <thead className="bg-gray-50 dark:bg-gray-800" {...props} />
-                                        ),
-                                        th: ({ node, ...props }) => (
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" {...props} />
-                                        ),
-                                        tbody: ({ node, ...props }) => (
-                                            <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700" {...props} />
-                                        ),
-                                        tr: ({ node, ...props }) => (
-                                            <tr className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors" {...props} />
-                                        ),
-                                        td: ({ node, ...props }) => (
-                                            <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap" {...props} />
-                                        ),
-                                        code: ({ node, inline, className, children, ...props }) => {
-                                            const match = /language-(\w+)/.exec(className || '')
-                                            return !inline && match ? (
-                                                <div className="rounded-md overflow-hidden my-4 border border-gray-200 dark:border-gray-700">
-                                                    <div className="bg-gray-100 dark:bg-gray-800 px-4 py-2 text-xs font-mono text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
-                                                        {match[1]}
-                                                    </div>
-                                                    <code className={className} {...props}>
-                                                        {children}
-                                                    </code>
-                                                </div>
-                                            ) : (
-                                                <code className="bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-sm font-mono text-pink-500 dark:text-pink-400" {...props}>
-                                                    {children}
-                                                </code>
-                                            )
-                                        }
+                                        thead: ({ node, ...props }) => <thead className="bg-slate-800" {...props} />,
+                                        th: ({ node, ...props }) => <th className="px-3 py-2 text-left text-xs font-medium text-slate-300 uppercase" {...props} />,
+                                        tbody: ({ node, ...props }) => <tbody className="divide-y divide-slate-700" {...props} />,
+                                        tr: ({ node, ...props }) => <tr className="hover:bg-slate-800/50" {...props} />,
+                                        td: ({ node, ...props }) => <td className="px-3 py-2 text-sm text-slate-300" {...props} />,
                                     }}
                                 >
                                     {msg.content}
                                 </ReactMarkdown>
                             </div>
-                            {/* {msg.sql && (
-                                <div className="mt-2 p-2 bg-gray-800 text-gray-200 text-xs font-mono rounded">
-                                    SQL: {msg.sql}
-                                </div>
-                            )} */}
                         </div>
                     </div>
                 ))}
                 {isLoading && (
                     <div className="flex gap-3">
-                        <div className="w-8 h-8 rounded-full bg-green-100 text-green-700 flex items-center justify-center shrink-0">
-                            <Bot size={18} />
+                        <div className="w-8 h-8 rounded-full bg-slate-700 text-blue-300 flex items-center justify-center shrink-0">
+                            <Bot size={16} />
                         </div>
-                        <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg rounded-tl-none">
-                            <Loader2 className="w-5 h-5 animate-spin text-gray-500" />
+                        <div className="bg-slate-800 p-3 rounded-2xl rounded-tl-none border border-slate-700">
+                            <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
                         </div>
                     </div>
                 )}
@@ -148,20 +116,20 @@ const ChatInterface = ({ messages, setMessages }) => {
             </div>
 
             {/* Input Area */}
-            <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+            <div className="p-4 border-t border-slate-700 bg-slate-800">
                 <form onSubmit={handleSend} className="flex gap-2">
                     <input
                         type="text"
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         placeholder="Ask about your inventory or sales..."
-                        className="flex-1 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary"
+                        className="flex-1 px-4 py-2 rounded-lg border border-slate-600 bg-slate-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         disabled={isLoading}
                     />
                     <button
                         type="submit"
                         disabled={isLoading || !input.trim()}
-                        className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg"
                     >
                         <Send size={20} />
                     </button>
