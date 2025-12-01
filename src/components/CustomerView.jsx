@@ -20,6 +20,7 @@ const CustomerView = () => {
     // Ref to handle pause state without triggering re-renders or dependency loops
     const isPausedForSpeaking = useRef(false);
     const recognitionRef = useRef(null);
+    const isRecognitionActive = useRef(false); // Track actual state
     const isMounted = useRef(true);
     const processedQueryRef = useRef(null);
 
@@ -34,16 +35,56 @@ const CustomerView = () => {
             processedQueryRef.current = query;
             setTranscript(query);
             handleVoiceQuery(query);
-
-            // Optional: Clear state to prevent re-processing on simple re-renders
-            // But we use ref to track processed query so it's fine.
         }
     }, [location.state]);
+
+    const startRecognition = () => {
+        if (!recognitionRef.current || !isMounted.current) return;
+
+        if (isRecognitionActive.current) {
+            console.log("Recognition already active, skipping start");
+            return;
+        }
+
+        try {
+            recognitionRef.current.start();
+            isRecognitionActive.current = true;
+            setIsListening(true);
+        } catch (e) {
+            console.error("Failed to start recognition:", e);
+            // If it says already started, we sync our state
+            if (e.name === 'InvalidStateError') {
+                isRecognitionActive.current = true;
+                setIsListening(true);
+            }
+        }
+    };
+
+    const stopRecognition = () => {
+        if (!recognitionRef.current) return;
+        try {
+            recognitionRef.current.stop();
+            // We don't set isRecognitionActive to false here immediately, 
+            // we wait for onend to be sure.
+        } catch (e) {
+            console.error("Failed to stop recognition:", e);
+        }
+    };
+
+    const abortRecognition = () => {
+        if (!recognitionRef.current) return;
+        try {
+            recognitionRef.current.abort();
+            isRecognitionActive.current = false;
+            setIsListening(false);
+        } catch (e) {
+            console.error("Failed to abort recognition:", e);
+        }
+    };
 
     useEffect(() => {
         isMounted.current = true;
         if (!SpeechRecognition) return;
-        // ... rest of the code ...
 
         // Create a fresh instance every time we mount or isAlwaysOn changes
         const recognition = new SpeechRecognition();
@@ -52,6 +93,13 @@ const CustomerView = () => {
         recognition.continuous = isAlwaysOn;
         recognition.lang = 'en-IN';
         recognition.interimResults = false;
+
+        recognition.onstart = () => {
+            if (isMounted.current) {
+                isRecognitionActive.current = true;
+                setIsListening(true);
+            }
+        };
 
         recognition.onresult = (event) => {
             if (!isMounted.current) return;
@@ -63,17 +111,21 @@ const CustomerView = () => {
 
         recognition.onend = () => {
             if (!isMounted.current) return;
+
+            isRecognitionActive.current = false;
+            console.log("Recognition ended");
+
             if (document.hidden) return; // Don't auto-restart if tab is hidden
 
-            console.log("Recognition ended");
             // Only auto-restart if we are NOT paused for speaking
             if (isAlwaysOn && !isPausedForSpeaking.current) {
                 console.log("Restarting recognition (Always On)...");
-                try {
-                    recognition.start();
-                } catch (e) {
-                    console.error("Failed to restart:", e);
-                }
+                // Add a small delay to prevent tight loops
+                setTimeout(() => {
+                    if (isMounted.current && !isRecognitionActive.current && !isPausedForSpeaking.current) {
+                        startRecognition();
+                    }
+                }, 500);
             } else if (!isAlwaysOn) {
                 setIsListening(false);
             }
@@ -81,39 +133,44 @@ const CustomerView = () => {
 
         recognition.onerror = (event) => {
             if (!isMounted.current) return;
+
+            // If error occurs, it usually means it stopped.
+            isRecognitionActive.current = false;
+
             if (document.hidden) return; // Don't retry if tab is hidden
 
             console.error("Speech recognition error", event.error);
+
+            // Handle specific errors
+            if (event.error === 'no-speech') {
+                // Just restart if always on
+            } else if (event.error === 'network') {
+                // Network error, maybe wait a bit longer
+            }
+
             if (isAlwaysOn && event.error !== 'aborted' && !isPausedForSpeaking.current) {
                 setTimeout(() => {
-                    if (isMounted.current && !document.hidden) {
-                        try {
-                            recognition.start();
-                        } catch (e) { console.error("Retry failed", e); }
+                    if (isMounted.current && !document.hidden && !isRecognitionActive.current) {
+                        startRecognition();
                     }
                 }, 1000);
+            } else {
+                setIsListening(false);
             }
         };
 
         // Auto-start if Always On is enabled (with delay for stability)
         if (isAlwaysOn) {
             setTimeout(() => {
-                if (isMounted.current && !document.hidden) {
-                    try {
-                        recognition.start();
-                        setIsListening(true);
-                    } catch (e) {
-                        console.error("Failed to auto-start:", e);
-                    }
+                if (isMounted.current && !document.hidden && !isRecognitionActive.current) {
+                    startRecognition();
                 }
             }, 500);
         }
 
         return () => {
             isMounted.current = false;
-            if (recognition) {
-                recognition.abort(); // Use abort for immediate stop
-            }
+            abortRecognition();
         };
     }, [isAlwaysOn]);
 
@@ -124,11 +181,7 @@ const CustomerView = () => {
                 // If user leaves the tab, turn OFF Always On mode
                 console.log("Tab hidden: Disabling Always On Mode");
                 setIsAlwaysOn(false);
-
-                const recognition = recognitionRef.current;
-                if (recognition) {
-                    recognition.abort();
-                }
+                abortRecognition();
             }
         };
 
@@ -173,16 +226,12 @@ const CustomerView = () => {
             return;
         }
 
-        const recognition = recognitionRef.current;
-        if (!recognition) return;
-
         if (isListening) {
-            recognition.stop();
+            stopRecognition();
             setIsAlwaysOn(false);
             setIsListening(false);
         } else {
-            recognition.start();
-            setIsListening(true);
+            startRecognition();
             setTranscript("Listening...");
         }
     };
@@ -194,7 +243,11 @@ const CustomerView = () => {
         setIsAlwaysOn(newState);
         isPausedForSpeaking.current = false; // Reset pause state
 
-        // The useEffect will handle the restart because isAlwaysOn changes
+        // If turning off, we should stop
+        if (!newState) {
+            stopRecognition();
+        }
+        // If turning on, the useEffect will handle the start
     };
 
     const handleVoiceQuery = async (text) => {
@@ -233,24 +286,24 @@ const CustomerView = () => {
             setIsSpeaking(true);
 
             // Pause recognition while speaking
-            const recognition = recognitionRef.current;
-            if (isAlwaysOn && recognition) {
+            if (isAlwaysOn && isRecognitionActive.current) {
                 isPausedForSpeaking.current = true;
-                recognition.stop();
+                stopRecognition();
                 console.log("Paused recognition for speech");
             }
 
             utterance.onend = () => {
                 setIsSpeaking(false);
                 // Resume recognition after speaking
-                if (isAlwaysOn && recognition) {
+                if (isAlwaysOn) {
                     console.log("Resuming recognition after speech");
                     isPausedForSpeaking.current = false;
-                    try {
-                        recognition.start();
-                    } catch (e) {
-                        console.error("Failed to resume:", e);
-                    }
+                    // Small delay to ensure synthesis is fully done
+                    setTimeout(() => {
+                        if (isMounted.current && !isRecognitionActive.current) {
+                            startRecognition();
+                        }
+                    }, 200);
                 }
             };
 
