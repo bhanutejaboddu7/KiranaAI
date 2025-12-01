@@ -209,7 +209,7 @@ const CustomerView = () => {
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         placeholder={isListening ? "Listening..." : "Ask anything..."}
-                        className="flex-1 px-4 py-3 rounded-full bg-slate-900 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="flex-1 px-4 py-3 rounded-full bg-slate-700 border border-slate-600 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         disabled={isLoading}
                     />
 
