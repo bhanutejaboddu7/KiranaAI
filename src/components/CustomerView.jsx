@@ -1,70 +1,43 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff, Volume2, Loader2, ArrowLeft } from 'lucide-react';
+import { Mic, MicOff, Volume2, Loader2 } from 'lucide-react';
 import { chatWithData } from '../services/api';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { cn } from '../lib/utils';
+import { SpeechRecognition } from '@capacitor-community/speech-recognition';
 
 const CustomerView = () => {
     const location = useLocation();
-    const navigate = useNavigate();
     const [isListening, setIsListening] = useState(false);
     const [transcript, setTranscript] = useState('');
     const [response, setResponse] = useState("Tap the microphone to start speaking...");
     const [isLoading, setIsLoading] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
+    const [hasPermission, setHasPermission] = useState(false);
 
-    const recognitionRef = useRef(null);
     const isMounted = useRef(true);
 
     useEffect(() => {
         isMounted.current = true;
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-        if (SpeechRecognition) {
-            const recognition = new SpeechRecognition();
-            recognition.continuous = false;
-            recognition.lang = 'en-IN';
-            recognition.interimResults = true;
-
-            recognition.onresult = (event) => {
-                if (!isMounted.current) return;
-                const current = event.resultIndex;
-                const text = event.results[current][0].transcript;
-                setTranscript(text);
-            };
-
-            recognition.onend = () => {
-                if (!isMounted.current) return;
-                setIsListening(false);
-                if (transcript.trim()) {
-                    handleSend(transcript);
-                }
-            };
-
-            recognition.onerror = (event) => {
-                if (!isMounted.current) return;
-                console.error("Speech error:", event.error);
-                setIsListening(false);
-                setResponse("Sorry, I didn't catch that. Please try again.");
-            };
-
-            recognitionRef.current = recognition;
-        }
+        // Check permissions on mount
+        SpeechRecognition.checkPermissions().then((result) => {
+            if (result.speechRecognition === 'granted') {
+                setHasPermission(true);
+            } else {
+                SpeechRecognition.requestPermissions().then((res) => {
+                    if (res.speechRecognition === 'granted') setHasPermission(true);
+                });
+            }
+        });
 
         return () => {
             isMounted.current = false;
-            if (recognitionRef.current) {
-                try {
-                    recognitionRef.current.abort();
-                } catch (e) {
-                    console.error("Error aborting recognition:", e);
-                }
-            }
+            SpeechRecognition.stop();
             if (window.speechSynthesis) {
                 window.speechSynthesis.cancel();
             }
         };
-    }, [transcript]);
+    }, []);
 
     // Handle Auto-Query from Deep Link
     useEffect(() => {
@@ -74,21 +47,70 @@ const CustomerView = () => {
         }
     }, [location.state]);
 
-    const toggleListening = () => {
-        if (!recognitionRef.current) {
-            alert("Voice recognition not supported.");
-            return;
+    const toggleListening = async () => {
+        if (!hasPermission) {
+            const res = await SpeechRecognition.requestPermissions();
+            if (res.speechRecognition !== 'granted') {
+                alert("Microphone permission is required.");
+                return;
+            }
+            setHasPermission(true);
         }
 
         if (isListening) {
-            recognitionRef.current.stop();
+            await SpeechRecognition.stop();
+            setIsListening(false);
         } else {
             setTranscript('');
             setResponse("Listening...");
-            recognitionRef.current.start();
             setIsListening(true);
+
+            try {
+                await SpeechRecognition.start({
+                    language: "en-IN",
+                    maxResults: 1,
+                    prompt: "Speak now...",
+                    partialResults: true,
+                    popup: false,
+                });
+
+                // Add listener for partial results if supported or just wait for final?
+                // The plugin usually returns matches in a listener or promise?
+                // Actually, the start method might not return the text directly in all versions.
+                // We need to add a listener.
+
+                SpeechRecognition.addListener('partialResults', (data) => {
+                    if (data.matches && data.matches.length > 0 && isMounted.current) {
+                        setTranscript(data.matches[0]);
+                    }
+                });
+
+            } catch (e) {
+                console.error("Start error:", e);
+                setIsListening(false);
+            }
         }
     };
+
+    // Add listener for final results outside toggle
+    useEffect(() => {
+        const resultListener = SpeechRecognition.addListener('listeningState', (data) => {
+            if (!data.status && isListening) {
+                // Stopped
+                setIsListening(false);
+            }
+        });
+
+        // Note: The plugin API varies. Some versions use 'partialResults' and 'matches'.
+        // Let's assume standard behavior: we might need to handle the result in a separate listener.
+        // Actually, for this plugin, usually we just get 'partialResults'.
+
+        return () => {
+            resultListener.remove();
+            SpeechRecognition.removeAllListeners();
+        };
+    }, [isListening]);
+
 
     const speakResponse = (text) => {
         if ('speechSynthesis' in window && window.speechSynthesis) {
@@ -109,8 +131,6 @@ const CustomerView = () => {
         setIsLoading(true);
 
         try {
-            // We only send the current query in this mode, or could maintain hidden history if needed.
-            // For now, keeping it simple as per "initial style".
             const data = await chatWithData(text, []);
 
             if (!isMounted.current) return;

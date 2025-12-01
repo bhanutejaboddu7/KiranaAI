@@ -52,7 +52,7 @@ const Layout = ({ children }) => {
                             className={cn(
                                 "flex items-center gap-4 px-6 py-4 rounded-xl transition-all duration-200 group",
                                 location.pathname === item.path
-                                    ? "bg-white text-primary shadow-lg font-bold transform scale-105"
+                                    ? "bg-white text-blue-600 shadow-lg font-bold transform scale-105"
                                     : "text-gray-100 hover:bg-white/10 hover:translate-x-1"
                             )}
                         >

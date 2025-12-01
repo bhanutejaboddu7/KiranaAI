@@ -11,5 +11,35 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        handleIntent(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(android.content.Intent intent) {
+        super.onNewIntent(intent);
+        handleIntent(intent);
+    }
+
+    private void handleIntent(android.content.Intent intent) {
+        if (android.content.Intent.ACTION_SEARCH.equals(intent.getAction())
+                || "com.google.android.gms.actions.SEARCH_ACTION".equals(intent.getAction())) {
+            String query = intent.getStringExtra(android.app.SearchManager.QUERY);
+            if (query != null) {
+                // Construct deep link URL
+                String url = "kiranaai://query?q=" + android.net.Uri.encode(query);
+                // Use bridge to load URL or trigger intent
+                // Since we can't easily access bridge from here to loadUrl directly without
+                // context issues sometimes,
+                // we'll rely on the fact that if this activity is launched, Capacitor handles
+                // the intent if it's a VIEW intent.
+                // But this is a SEARCH intent. We need to convert it to a VIEW intent or handle
+                // it manually.
+
+                android.content.Intent viewIntent = new android.content.Intent(android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse(url));
+                viewIntent.setPackage(getPackageName());
+                startActivity(viewIntent);
+            }
+        }
     }
 }
