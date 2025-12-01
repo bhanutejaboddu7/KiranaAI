@@ -40,65 +40,9 @@ const StockManager = () => {
         ref.current?.click();
     };
 
-    const [importLoading, setImportLoading] = useState(false);
-
-    const handleImport = async (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        setImportLoading(true);
-        try {
-            const reader = new FileReader();
-            reader.onload = async (e) => {
-                try {
-                    const json = JSON.parse(e.target.result);
-                    // Basic validation
-                    if (!Array.isArray(json)) throw new Error("File must contain a list of products");
-
-                    await import('../services/api').then(mod => mod.importInventory(json));
-                    alert("Inventory imported successfully!");
-                    window.location.reload(); // Refresh to show new data if needed
-                } catch (err) {
-                    console.error(err);
-                    alert("Failed to import: " + err.message);
-                } finally {
-                    setImportLoading(false);
-                }
-            };
-            reader.readAsText(file);
-        } catch (err) {
-            console.error(err);
-            setImportLoading(false);
-        }
-    };
-
     return (
         <div className="p-4 space-y-8 pb-20">
             <h1 className="text-2xl font-bold mb-4">Stock Management</h1>
-
-            {/* Import Inventory Section */}
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <h2 className="text-lg font-semibold flex items-center gap-2 mb-4">
-                    <Upload size={20} /> Import Inventory
-                </h2>
-                <p className="text-sm text-gray-500 mb-4">Upload a JSON file to bulk add products.</p>
-
-                <div className="relative">
-                    <input
-                        type="file"
-                        id="json-import"
-                        className="hidden"
-                        accept=".json"
-                        onChange={handleImport}
-                    />
-                    <label
-                        htmlFor="json-import"
-                        className="flex items-center justify-center gap-2 w-full bg-indigo-600 text-white py-3 rounded-lg font-medium cursor-pointer hover:bg-indigo-700 transition-colors"
-                    >
-                        {importLoading ? "Importing..." : "Select JSON File"}
-                    </label>
-                </div>
-            </div>
 
             {/* Bill OCR Section */}
             <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">

@@ -1,350 +1,227 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Mic, MicOff, Volume2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Mic, MicOff, Send, Bot, User, Volume2, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import 'highlight.js/styles/github-dark.css';
 import { chatWithData } from '../services/api';
-
 import { useLocation } from 'react-router-dom';
+import { cn } from '../lib/utils';
 
 const CustomerView = () => {
     const location = useLocation();
+    const [messages, setMessages] = useState([
+        { role: 'assistant', content: "Hello! I'm your shop assistant. You can speak or type to check stock, record sales, or ask questions." }
+    ]);
+    const [input, setInput] = useState('');
     const [isListening, setIsListening] = useState(false);
-    const [transcript, setTranscript] = useState('');
-    const [response, setResponse] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
-    const [isAlwaysOn, setIsAlwaysOn] = useState(false);
-    const [wakeLock, setWakeLock] = useState(null);
 
-    // Ref to handle pause state without triggering re-renders or dependency loops
-    const isPausedForSpeaking = useRef(false);
+    const messagesEndRef = useRef(null);
     const recognitionRef = useRef(null);
     const isMounted = useRef(true);
-    const processedQueryRef = useRef(null);
 
-    // Speech Recognition Setup
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-    // Handle Auto-Query from Deep Link
+    // Scroll to bottom on new message
     useEffect(() => {
-        if (location.state?.autoQuery && location.state.autoQuery !== processedQueryRef.current) {
-            const query = location.state.autoQuery;
-            console.log("Processing auto-query:", query);
-            processedQueryRef.current = query;
-            setTranscript(query);
-            handleVoiceQuery(query);
-        }
-    }, [location.state]);
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, [messages]);
 
+    // Initialize Speech Recognition
     useEffect(() => {
         isMounted.current = true;
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-        if (!SpeechRecognition) {
-            console.warn("Speech Recognition not supported");
-            return;
-        }
-
-        try {
-            // Create a fresh instance every time we mount or isAlwaysOn changes
+        if (SpeechRecognition) {
             const recognition = new SpeechRecognition();
-            recognitionRef.current = recognition;
-
-            recognition.continuous = isAlwaysOn;
+            recognition.continuous = false; // Single turn for chat
             recognition.lang = 'en-IN';
             recognition.interimResults = false;
 
             recognition.onresult = (event) => {
-                if (!isMounted.current) return;
-                try {
-                    const results = event.results;
-                    if (results && results.length > 0) {
-                        const text = results[results.length - 1][0].transcript;
-                        console.log("Recognized:", text);
-                        handleVoiceQuery(text);
-                    }
-                } catch (err) {
-                    console.error("Error processing result:", err);
-                }
+                const text = event.results[0][0].transcript;
+                setInput(text);
+                handleSend(null, text); // Auto-send on voice end
             };
 
-            // ... rest of handlers attached below
-
-            recognition.onend = () => {
-                if (!isMounted.current) return;
-                if (document.hidden) return;
-
-                console.log("Recognition ended");
-                if (isAlwaysOn && !isPausedForSpeaking.current) {
-                    console.log("Restarting recognition (Always On)...");
-                    try {
-                        recognitionRef.current?.start();
-                    } catch (e) {
-                        console.error("Failed to restart:", e);
-                    }
-                } else if (!isAlwaysOn) {
-                    setIsListening(false);
-                }
-            };
-
+            recognition.onend = () => setIsListening(false);
             recognition.onerror = (event) => {
-                if (!isMounted.current) return;
-                console.error("Speech recognition error", event.error);
-                if (isAlwaysOn && event.error !== 'aborted' && !isPausedForSpeaking.current) {
-                    // Retry logic
-                }
+                console.error("Speech error:", event.error);
+                setIsListening(false);
             };
 
-            // Auto-start if Always On is enabled (with delay for stability)
-            if (isAlwaysOn) {
-                setTimeout(() => {
-                    if (isMounted.current && !document.hidden) {
-                        try {
-                            // Double check if recognition instance exists using REF
-                            if (recognitionRef.current) {
-                                recognitionRef.current.start();
-                                setIsListening(true);
-                            } else {
-                                console.warn("Recognition instance lost, recreating...");
-                                setIsAlwaysOn(false);
-                            }
-                        } catch (e) {
-                            console.error("Failed to auto-start:", e);
-                        }
-                    }
-                }, 500);
-            }
-
-        } catch (e) {
-            console.error("Failed to initialize SpeechRecognition:", e);
+            recognitionRef.current = recognition;
         }
 
         return () => {
             isMounted.current = false;
-            if (recognition) {
-                recognition.abort(); // Use abort for immediate stop
-            }
+            if (recognitionRef.current) recognitionRef.current.abort();
+            window.speechSynthesis.cancel();
         };
-    }, [isAlwaysOn]);
-
-    // Handle Browser Tab Switching (Visibility Change)
-    useEffect(() => {
-        const handleVisibilityChange = () => {
-            if (document.hidden) {
-                // If user leaves the tab, turn OFF Always On mode
-                console.log("Tab hidden: Disabling Always On Mode");
-                setIsAlwaysOn(false);
-
-                const recognition = recognitionRef.current;
-                if (recognition) {
-                    recognition.abort();
-                }
-            }
-        };
-
-        document.addEventListener('visibilitychange', handleVisibilityChange);
-        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
     }, []);
 
-    // Wake Lock Logic
+    // Handle Auto-Query from Deep Link
     useEffect(() => {
-        const requestWakeLock = async () => {
-            if ('wakeLock' in navigator && isAlwaysOn) {
-                try {
-                    const lock = await navigator.wakeLock.request('screen');
-                    setWakeLock(lock);
-                    console.log('Wake Lock active');
-                } catch (err) {
-                    console.error(`${err.name}, ${err.message}`);
-                }
-            }
-        };
-
-        const releaseWakeLock = async () => {
-            if (wakeLock) {
-                await wakeLock.release();
-                setWakeLock(null);
-                console.log('Wake Lock released');
-            }
-        };
-
-        if (isAlwaysOn) {
-            requestWakeLock();
-        } else {
-            releaseWakeLock();
+        if (location.state?.autoQuery) {
+            handleSend(null, location.state.autoQuery);
         }
-
-        return () => releaseWakeLock();
-    }, [isAlwaysOn]);
+    }, [location.state]);
 
     const toggleListening = () => {
-        if (!SpeechRecognition) {
-            alert("Voice recognition not supported in this browser.");
+        if (!recognitionRef.current) {
+            alert("Voice recognition not supported.");
             return;
         }
 
-        const recognition = recognitionRef.current;
-        if (!recognition) return;
-
         if (isListening) {
-            recognition.stop();
-            setIsAlwaysOn(false);
-            setIsListening(false);
+            recognitionRef.current.stop();
         } else {
-            recognition.start();
+            recognitionRef.current.start();
             setIsListening(true);
-            setTranscript("Listening...");
-        }
-    };
-
-    const toggleAlwaysOn = () => {
-        if (!SpeechRecognition) return;
-
-        const newState = !isAlwaysOn;
-        setIsAlwaysOn(newState);
-        isPausedForSpeaking.current = false; // Reset pause state
-
-        // The useEffect will handle the restart because isAlwaysOn changes
-    };
-
-    const handleVoiceQuery = async (text) => {
-        // Wake Word Logic
-        if (isAlwaysOn) {
-            const wakeWord = "kirana";
-            const lowerText = text.toLowerCase();
-
-            if (!lowerText.includes(wakeWord)) {
-                console.log("Ignored (No wake word):", text);
-                return;
-            }
-
-            // Only show transcript if wake word is detected
-            setTranscript(text);
-        } else {
-            setTranscript(text);
-        }
-
-        try {
-            const res = await chatWithData(text);
-            setResponse(res.response);
-            speakResponse(res.response);
-        } catch (error) {
-            console.error("Error processing voice query:", error);
-            setResponse("Sorry, I couldn't understand that.");
         }
     };
 
     const speakResponse = (text) => {
         if ('speechSynthesis' in window) {
-            // Cancel any ongoing speech
             window.speechSynthesis.cancel();
-
             const utterance = new SpeechSynthesisUtterance(text);
-            setIsSpeaking(true);
-
-            // Pause recognition while speaking
-            const recognition = recognitionRef.current;
-            if (isAlwaysOn && recognition) {
-                isPausedForSpeaking.current = true;
-                recognition.stop();
-                console.log("Paused recognition for speech");
-            }
-
-            utterance.onend = () => {
-                setIsSpeaking(false);
-                // Resume recognition after speaking
-                if (isAlwaysOn && recognition) {
-                    console.log("Resuming recognition after speech");
-                    isPausedForSpeaking.current = false;
-                    try {
-                        recognition.start();
-                    } catch (e) {
-                        console.error("Failed to resume:", e);
-                    }
-                }
-            };
-
+            utterance.onstart = () => setIsSpeaking(true);
+            utterance.onend = () => setIsSpeaking(false);
             window.speechSynthesis.speak(utterance);
         }
     };
 
+    const handleSend = async (e, overrideInput = null) => {
+        if (e) e.preventDefault();
+        const text = overrideInput || input;
+        if (!text.trim()) return;
+
+        // Add User Message
+        const userMsg = { role: 'user', content: text };
+        setMessages(prev => [...prev, userMsg]);
+        setInput('');
+        setIsLoading(true);
+
+        try {
+            // Prepare history for API
+            const history = messages.map(m => ({ role: m.role, content: m.content }));
+
+            const data = await chatWithData(text, history);
+            const botMsg = { role: 'assistant', content: data.response };
+
+            setMessages(prev => [...prev, botMsg]);
+            speakResponse(data.response); // Auto-speak response in this mode
+        } catch (error) {
+            console.error(error);
+            setMessages(prev => [...prev, { role: 'assistant', content: "Sorry, I had trouble connecting to the server." }]);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     return (
-        <div className="flex flex-col items-center justify-center min-h-[80vh] p-4 text-center space-y-8">
-            <h1 className="text-3xl font-bold text-gray-800">Customer Assistant</h1>
-
-            {/* Always On Toggle */}
-            <div className="flex items-center gap-3 bg-white p-3 rounded-full shadow-sm border border-gray-200">
-                <span className="text-sm font-medium text-gray-600">Always On Mode</span>
-                <button
-                    onClick={toggleAlwaysOn}
-                    className={`w-12 h-6 rounded-full transition-colors relative ${isAlwaysOn ? 'bg-green-500' : 'bg-gray-300'}`}
-                >
-                    <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${isAlwaysOn ? 'left-7' : 'left-1'}`} />
-                </button>
+        <div className="flex flex-col h-[calc(100vh-4rem)] bg-slate-900 text-slate-100">
+            {/* Header */}
+            <div className="p-4 bg-slate-800 border-b border-slate-700 shadow-sm flex justify-between items-center">
+                <h1 className="text-lg font-bold flex items-center gap-2">
+                    <Bot className="text-blue-400" /> Kirana AI Assistant
+                </h1>
+                {isSpeaking && <Volume2 className="text-green-400 animate-pulse" size={20} />}
             </div>
 
-            <div className="relative">
-                <button
-                    onClick={toggleListening}
-                    className={`w-32 h-32 rounded-full flex items-center justify-center shadow-lg transition-all ${isListening
-                        ? isAlwaysOn ? 'bg-green-500 animate-pulse ring-4 ring-green-200' : 'bg-red-500 animate-pulse'
-                        : 'bg-blue-600 hover:bg-blue-700'
-                        }`}
-                >
-                    {isListening ? <MicOff size={48} className="text-white" /> : <Mic size={48} className="text-white" />}
-                </button>
-                {isListening && (
-                    <p className="mt-4 text-gray-600 font-medium">
-                        {isAlwaysOn ? "Always Listening..." : "Listening..."}
-                    </p>
+            {/* Messages Area */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {messages.map((msg, index) => (
+                    <div
+                        key={index}
+                        className={cn(
+                            "flex gap-3 max-w-[85%]",
+                            msg.role === 'user' ? "ml-auto flex-row-reverse" : ""
+                        )}
+                    >
+                        <div className={cn(
+                            "w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-md",
+                            msg.role === 'user' ? "bg-blue-600 text-white" : "bg-slate-700 text-blue-300"
+                        )}>
+                            {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
+                        </div>
+
+                        <div className={cn(
+                            "p-3 rounded-2xl text-sm shadow-md",
+                            msg.role === 'user'
+                                ? "bg-blue-600 text-white rounded-tr-none"
+                                : "bg-slate-800 text-slate-200 rounded-tl-none border border-slate-700"
+                        )}>
+                            <div className="prose prose-sm prose-invert max-w-none">
+                                <ReactMarkdown
+                                    remarkPlugins={[remarkGfm]}
+                                    rehypePlugins={[rehypeHighlight]}
+                                    components={{
+                                        table: ({ node, ...props }) => (
+                                            <div className="overflow-x-auto my-2 rounded border border-slate-600 bg-slate-900/50">
+                                                <table className="min-w-full divide-y divide-slate-700" {...props} />
+                                            </div>
+                                        ),
+                                        thead: ({ node, ...props }) => <thead className="bg-slate-800" {...props} />,
+                                        th: ({ node, ...props }) => <th className="px-3 py-2 text-left text-xs font-medium text-slate-300 uppercase" {...props} />,
+                                        tbody: ({ node, ...props }) => <tbody className="divide-y divide-slate-700" {...props} />,
+                                        tr: ({ node, ...props }) => <tr className="hover:bg-slate-800/50" {...props} />,
+                                        td: ({ node, ...props }) => <td className="px-3 py-2 text-sm text-slate-300" {...props} />,
+                                    }}
+                                >
+                                    {msg.content}
+                                </ReactMarkdown>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+                {isLoading && (
+                    <div className="flex gap-3">
+                        <div className="w-8 h-8 rounded-full bg-slate-700 text-blue-300 flex items-center justify-center shrink-0">
+                            <Bot size={16} />
+                        </div>
+                        <div className="bg-slate-800 p-3 rounded-2xl rounded-tl-none border border-slate-700">
+                            <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+                        </div>
+                    </div>
                 )}
+                <div ref={messagesEndRef} />
             </div>
 
-            {transcript && (
-                <div className="bg-gray-100 p-4 rounded-lg max-w-md w-full">
-                    <p className="text-sm text-gray-500 mb-1">You said:</p>
-                    <p className="text-lg font-medium text-gray-800">"{transcript}"</p>
-                </div>
-            )}
+            {/* Input Area */}
+            <div className="p-4 bg-slate-800 border-t border-slate-700">
+                <form onSubmit={handleSend} className="flex gap-2 items-center">
+                    <button
+                        type="button"
+                        onClick={toggleListening}
+                        className={cn(
+                            "p-3 rounded-full transition-all shadow-lg",
+                            isListening
+                                ? "bg-red-500 text-white animate-pulse ring-2 ring-red-400"
+                                : "bg-slate-700 text-slate-300 hover:bg-slate-600"
+                        )}
+                    >
+                        {isListening ? <MicOff size={20} /> : <Mic size={20} />}
+                    </button>
 
-            {response && (
-                <div className="bg-green-50 border border-green-200 p-6 rounded-lg max-w-md w-full shadow-sm">
-                    <div className="flex items-center justify-center gap-2 mb-2 text-green-700">
-                        <Volume2 size={24} className={isSpeaking ? 'animate-bounce' : ''} />
-                        <span className="font-bold">Assistant</span>
-                    </div>
-                    <div className="prose prose-sm max-w-none text-left">
-                        <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            rehypePlugins={[rehypeHighlight]}
-                            components={{
-                                table: ({ node, ...props }) => (
-                                    <div className="overflow-x-auto my-4 rounded-lg border border-green-200 shadow-sm bg-white">
-                                        <table className="min-w-full divide-y divide-green-100" {...props} />
-                                    </div>
-                                ),
-                                thead: ({ node, ...props }) => (
-                                    <thead className="bg-green-100" {...props} />
-                                ),
-                                th: ({ node, ...props }) => (
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider" {...props} />
-                                ),
-                                tbody: ({ node, ...props }) => (
-                                    <tbody className="bg-white divide-y divide-green-50" {...props} />
-                                ),
-                                tr: ({ node, ...props }) => (
-                                    <tr className="hover:bg-green-50 transition-colors" {...props} />
-                                ),
-                                td: ({ node, ...props }) => (
-                                    <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap" {...props} />
-                                ),
-                            }}
-                        >
-                            {response}
-                        </ReactMarkdown>
-                    </div>
-                </div>
-            )}
+                    <input
+                        type="text"
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        placeholder={isListening ? "Listening..." : "Ask anything..."}
+                        className="flex-1 px-4 py-3 rounded-full bg-slate-900 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={isLoading}
+                    />
+
+                    <button
+                        type="submit"
+                        disabled={isLoading || !input.trim()}
+                        className="p-3 bg-blue-600 text-white rounded-full hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg transition-colors"
+                    >
+                        <Send size={20} />
+                    </button>
+                </form>
+            </div>
         </div>
     );
 };
