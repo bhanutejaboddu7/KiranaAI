@@ -23,6 +23,8 @@ const CustomerView = () => {
     const isRecognitionActive = useRef(false); // Track actual state
     const isMounted = useRef(true);
     const processedQueryRef = useRef(null);
+    const retryCountRef = useRef(0); // Track retries for backoff
+    const restartDelayRef = useRef(500); // Dynamic restart delay
 
     // Speech Recognition Setup
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -50,6 +52,7 @@ const CustomerView = () => {
             recognitionRef.current.start();
             isRecognitionActive.current = true;
             setIsListening(true);
+            // We don't reset retryCount here immediately, we do it on 'onstart'
         } catch (e) {
             console.error("Failed to start recognition:", e);
             // If it says already started, we sync our state
@@ -64,8 +67,6 @@ const CustomerView = () => {
         if (!recognitionRef.current) return;
         try {
             recognitionRef.current.stop();
-            // We don't set isRecognitionActive to false here immediately, 
-            // we wait for onend to be sure.
         } catch (e) {
             console.error("Failed to stop recognition:", e);
         }
@@ -96,8 +97,11 @@ const CustomerView = () => {
 
         recognition.onstart = () => {
             if (isMounted.current) {
+                console.log("Recognition started");
                 isRecognitionActive.current = true;
                 setIsListening(true);
+                retryCountRef.current = 0; // Reset retry count on successful start
+                restartDelayRef.current = 500; // Reset delay
             }
         };
 
@@ -119,13 +123,13 @@ const CustomerView = () => {
 
             // Only auto-restart if we are NOT paused for speaking
             if (isAlwaysOn && !isPausedForSpeaking.current) {
-                console.log("Restarting recognition (Always On)...");
-                // Add a small delay to prevent tight loops
+                console.log(`Restarting recognition in ${restartDelayRef.current}ms...`);
+
                 setTimeout(() => {
                     if (isMounted.current && !isRecognitionActive.current && !isPausedForSpeaking.current) {
                         startRecognition();
                     }
-                }, 500);
+                }, restartDelayRef.current);
             } else if (!isAlwaysOn) {
                 setIsListening(false);
             }
@@ -134,32 +138,29 @@ const CustomerView = () => {
         recognition.onerror = (event) => {
             if (!isMounted.current) return;
 
-            // If error occurs, it usually means it stopped.
-            isRecognitionActive.current = false;
-
-            if (document.hidden) return; // Don't retry if tab is hidden
+            // If error occurs, it usually means it stopped or will stop.
+            // We DO NOT restart here. We let onend handle it.
 
             console.error("Speech recognition error", event.error);
 
-            // Handle specific errors
-            if (event.error === 'no-speech') {
-                // Just restart if always on
-            } else if (event.error === 'network') {
-                // Network error, maybe wait a bit longer
-            }
-
-            if (isAlwaysOn && event.error !== 'aborted' && !isPausedForSpeaking.current) {
-                setTimeout(() => {
-                    if (isMounted.current && !document.hidden && !isRecognitionActive.current) {
-                        startRecognition();
-                    }
-                }, 1000);
-            } else {
+            if (event.error === 'network') {
+                retryCountRef.current += 1;
+                // Exponential backoff: 1s, 2s, 4s... max 10s
+                restartDelayRef.current = Math.min(1000 * Math.pow(2, retryCountRef.current), 10000);
+                console.log(`Network error detected. Setting backoff delay to ${restartDelayRef.current}ms`);
+            } else if (event.error === 'no-speech') {
+                restartDelayRef.current = 500; // Standard delay
+            } else if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                // Fatal errors, stop everything
+                setIsAlwaysOn(false);
                 setIsListening(false);
+                restartDelayRef.current = 999999; // Prevent restart effectively
+            } else {
+                restartDelayRef.current = 1000; // Default error delay
             }
         };
 
-        // Auto-start if Always On is enabled (with delay for stability)
+        // Auto-start if Always On is enabled
         if (isAlwaysOn) {
             setTimeout(() => {
                 if (isMounted.current && !document.hidden && !isRecognitionActive.current) {
@@ -178,7 +179,6 @@ const CustomerView = () => {
     useEffect(() => {
         const handleVisibilityChange = () => {
             if (document.hidden) {
-                // If user leaves the tab, turn OFF Always On mode
                 console.log("Tab hidden: Disabling Always On Mode");
                 setIsAlwaysOn(false);
                 abortRecognition();
@@ -242,16 +242,15 @@ const CustomerView = () => {
         const newState = !isAlwaysOn;
         setIsAlwaysOn(newState);
         isPausedForSpeaking.current = false; // Reset pause state
+        retryCountRef.current = 0;
+        restartDelayRef.current = 500;
 
-        // If turning off, we should stop
         if (!newState) {
             stopRecognition();
         }
-        // If turning on, the useEffect will handle the start
     };
 
     const handleVoiceQuery = async (text) => {
-        // Wake Word Logic
         if (isAlwaysOn) {
             const wakeWord = "kirana";
             const lowerText = text.toLowerCase();
@@ -260,8 +259,6 @@ const CustomerView = () => {
                 console.log("Ignored (No wake word):", text);
                 return;
             }
-
-            // Only show transcript if wake word is detected
             setTranscript(text);
         } else {
             setTranscript(text);
@@ -279,13 +276,11 @@ const CustomerView = () => {
 
     const speakResponse = (text) => {
         if ('speechSynthesis' in window) {
-            // Cancel any ongoing speech
             window.speechSynthesis.cancel();
 
             const utterance = new SpeechSynthesisUtterance(text);
             setIsSpeaking(true);
 
-            // Pause recognition while speaking
             if (isAlwaysOn && isRecognitionActive.current) {
                 isPausedForSpeaking.current = true;
                 stopRecognition();
@@ -294,11 +289,9 @@ const CustomerView = () => {
 
             utterance.onend = () => {
                 setIsSpeaking(false);
-                // Resume recognition after speaking
                 if (isAlwaysOn) {
                     console.log("Resuming recognition after speech");
                     isPausedForSpeaking.current = false;
-                    // Small delay to ensure synthesis is fully done
                     setTimeout(() => {
                         if (isMounted.current && !isRecognitionActive.current) {
                             startRecognition();
