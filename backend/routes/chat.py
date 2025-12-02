@@ -3,7 +3,7 @@ import google.generativeai as genai
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-import database, models
+from .. import database, models
 from dotenv import load_dotenv
 
 load_dotenv()
