@@ -46,11 +46,4 @@ export const importInventory = async (products) => {
     return response.data;
 };
 
-export const transcribeAudio = async (audioBlob) => {
-    const formData = new FormData();
-    formData.append('file', audioBlob, 'recording.webm');
-    const response = await api.post('/chat/transcribe', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-    });
-    return response.data;
-};
+

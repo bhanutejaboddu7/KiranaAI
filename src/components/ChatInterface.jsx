@@ -2,23 +2,25 @@ import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
-import 'highlight.js/styles/github-dark.css'; // Import highlight.js styles
-import { Send, Bot, User, Loader2, Mic, MicOff, Volume2 } from 'lucide-react';
-import { chatWithData, transcribeAudio } from '../services/api';
+import 'highlight.js/styles/github-dark.css';
+import { Send, Bot, User, Loader2, Mic, MicOff, Radio } from 'lucide-react';
+import { chatWithData } from '../services/api';
 import { cn } from '../lib/utils';
-import { SpeechRecognition } from '@capacitor-community/speech-recognition';
 
 const ChatInterface = ({ messages, setMessages }) => {
-    // Local state removed, using props now
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isRecording, setIsRecording] = useState(false);
-    const [isTranscribing, setIsTranscribing] = useState(false);
-    const [isSpeaking, setIsSpeaking] = useState(false);
+    const [isLiveMode, setIsLiveMode] = useState(false);
+    const [isConnected, setIsConnected] = useState(false);
 
     const messagesEndRef = useRef(null);
-    const mediaRecorderRef = useRef(null);
-    const audioChunksRef = useRef([]);
+    const websocketRef = useRef(null);
+    const audioContextRef = useRef(null);
+    const processorRef = useRef(null);
+    const sourceRef = useRef(null);
+    const audioQueueRef = useRef([]);
+    const isPlayingRef = useRef(false);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -26,7 +28,14 @@ const ChatInterface = ({ messages, setMessages }) => {
 
     useEffect(() => {
         scrollToBottom();
-    }, [messages, isLoading, isTranscribing]);
+    }, [messages, isLoading]);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            stopLiveSession();
+        };
+    }, []);
 
     const handleSend = async (e) => {
         if (e) e.preventDefault();
@@ -52,9 +61,6 @@ const ChatInterface = ({ messages, setMessages }) => {
                 sql: data.sql_query
             }]);
 
-            // Speak the response
-            speakResponse(data.response);
-
         } catch (error) {
             setMessages(prev => [...prev, {
                 role: 'assistant',
@@ -64,136 +70,6 @@ const ChatInterface = ({ messages, setMessages }) => {
             setIsLoading(false);
         }
     };
-
-    const startRecording = async () => {
-        try {
-            // Request permissions first (using the plugin helper)
-            try {
-                await SpeechRecognition.requestPermissions();
-            } catch (permError) {
-                console.warn("Permission request via plugin failed/skipped:", permError);
-            }
-
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-            // Determine supported mime type
-            let mimeType = 'audio/webm';
-            if (MediaRecorder.isTypeSupported('audio/mp4')) {
-                mimeType = 'audio/mp4';
-            } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-                mimeType = 'audio/webm;codecs=opus';
-            }
-
-            console.log("Using MIME type:", mimeType);
-            mediaRecorderRef.current = new MediaRecorder(stream, { mimeType });
-            audioChunksRef.current = [];
-
-            mediaRecorderRef.current.ondataavailable = (event) => {
-                if (event.data.size > 0) {
-                    audioChunksRef.current.push(event.data);
-                }
-            };
-
-            mediaRecorderRef.current.onstop = async () => {
-                const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
-                setIsTranscribing(true);
-                try {
-                    const data = await transcribeAudio(audioBlob);
-                    if (data.text) {
-                        setInput(data.text);
-                        handleSendWithText(data.text);
-                    }
-                } catch (error) {
-                    console.error("Transcription error:", error);
-                    const errorMessage = error.response?.data?.detail || error.message || "Unknown error";
-                    alert(`Failed to transcribe audio: ${errorMessage}`);
-                } finally {
-                    setIsTranscribing(false);
-                }
-
-                // Stop all tracks
-                stream.getTracks().forEach(track => track.stop());
-            };
-
-            mediaRecorderRef.current.start();
-            setIsRecording(true);
-        } catch (error) {
-            console.error("Error accessing microphone:", error);
-            alert(`Could not access microphone. Error: ${error.name} - ${error.message}. Please ensure you have granted microphone permission.`);
-        }
-    };
-
-    const stopRecording = () => {
-        if (mediaRecorderRef.current && isRecording) {
-            mediaRecorderRef.current.stop();
-            setIsRecording(false);
-        }
-    };
-
-    const toggleRecording = () => {
-        if (isRecording) {
-            stopRecording();
-        } else {
-            startRecording();
-        }
-    };
-
-    const handleSendWithText = async (text) => {
-        if (!text.trim()) return;
-
-        setMessages(prev => [...prev, { role: 'user', content: text }]);
-        setIsLoading(true);
-
-        try {
-            const history = messages.slice(1).map(msg => ({
-                role: msg.role,
-                content: msg.content
-            }));
-
-            const data = await chatWithData(text, history);
-            setMessages(prev => [...prev, {
-                role: 'assistant',
-                content: data.response,
-                sql: data.sql_query
-            }]);
-            speakResponse(data.response);
-        } catch (error) {
-            setMessages(prev => [...prev, {
-                role: 'assistant',
-                content: "Sorry, I encountered an error processing your request."
-            }]);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const speakResponse = (text) => {
-        if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
-            // Strip markdown for speech (simple regex to remove some common markdown)
-            const cleanText = text.replace(/[*#`_]/g, '');
-            const utterance = new SpeechSynthesisUtterance(cleanText);
-
-            // Try to find an Indian English voice
-            const voices = window.speechSynthesis.getVoices();
-            const indianVoice = voices.find(v => v.lang.includes('IN'));
-            if (indianVoice) utterance.voice = indianVoice;
-
-            setIsSpeaking(true);
-            utterance.onend = () => setIsSpeaking(false);
-            window.speechSynthesis.speak(utterance);
-        }
-    };
-
-    // Live Mode State
-    const [isLiveMode, setIsLiveMode] = useState(false);
-    const [isConnected, setIsConnected] = useState(false);
-    const websocketRef = useRef(null);
-    const audioContextRef = useRef(null);
-    const processorRef = useRef(null);
-    const sourceRef = useRef(null);
-    const audioQueueRef = useRef([]);
-    const isPlayingRef = useRef(false);
 
     const toggleLiveMode = () => {
         if (isLiveMode) {
@@ -211,10 +87,11 @@ const ChatInterface = ({ messages, setMessages }) => {
             // Initialize WebSocket
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const wsUrl = `${protocol}//${window.location.host}/ws/chat`; // Use relative path for proxy
-            // For local dev with separate backend port, might need full URL:
-            // const wsUrl = 'wss://kiranaai.onrender.com/ws/chat'; 
+            // For local dev with separate backend port, might need full URL if not proxied correctly
+            // const wsUrl = 'ws://10.0.2.2:8000/ws/chat'; // Android Emulator
 
-            websocketRef.current = new WebSocket("wss://kiranaai.onrender.com/ws/chat");
+            console.log("Connecting to WebSocket:", wsUrl);
+            websocketRef.current = new WebSocket(wsUrl);
 
             websocketRef.current.onopen = () => {
                 console.log("Connected to Live API");
@@ -240,7 +117,6 @@ const ChatInterface = ({ messages, setMessages }) => {
                         }
                     }
                 } catch (e) {
-                    // If not JSON, might be raw text or other format
                     console.log("Received non-JSON message:", text);
                 }
             };
@@ -337,9 +213,8 @@ const ChatInterface = ({ messages, setMessages }) => {
     };
 
     const playAudioChunk = async (base64Data) => {
-        // Simple queue-based playback
-        // In a real app, use a proper AudioWorklet for smooth streaming playback
         try {
+            // Decode base64
             const binaryString = atob(base64Data);
             const len = binaryString.length;
             const bytes = new Uint8Array(len);
@@ -347,14 +222,23 @@ const ChatInterface = ({ messages, setMessages }) => {
                 bytes[i] = binaryString.charCodeAt(i);
             }
 
-            // Create a blob and play it (not efficient for streaming but works for chunks)
-            // Better: decode using AudioContext
-            // For now, let's assume Gemini sends playable chunks or we need to decode PCM
-            // Gemini Live API usually sends PCM 24kHz or similar. We need to check the header.
-            // If it's PCM, we need to play it via AudioContext.
+            // Convert PCM to AudioBuffer
+            // Gemini sends PCM 24kHz (usually)
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+            const int16Array = new Int16Array(bytes.buffer);
+            const float32Array = new Float32Array(int16Array.length);
 
-            // Placeholder: Log that we received audio
-            console.log("Received audio chunk from Gemini", bytes.length);
+            for (let i = 0; i < int16Array.length; i++) {
+                float32Array[i] = int16Array[i] / 32768.0;
+            }
+
+            const audioBuffer = audioCtx.createBuffer(1, float32Array.length, 24000);
+            audioBuffer.getChannelData(0).set(float32Array);
+
+            const source = audioCtx.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(audioCtx.destination);
+            source.start();
 
         } catch (e) {
             console.error("Error playing audio:", e);
@@ -419,14 +303,6 @@ const ChatInterface = ({ messages, setMessages }) => {
                         </div>
                     </div>
                 )}
-                {isTranscribing && (
-                    <div className="flex gap-3 ml-auto flex-row-reverse">
-                        <div className="bg-slate-800 p-3 rounded-2xl rounded-tr-none border border-slate-700 flex items-center gap-2">
-                            <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
-                            <span className="text-xs text-slate-400">Transcribing audio...</span>
-                        </div>
-                    </div>
-                )}
                 <div ref={messagesEndRef} />
             </div>
 
@@ -437,28 +313,14 @@ const ChatInterface = ({ messages, setMessages }) => {
                         type="button"
                         onClick={toggleLiveMode}
                         className={cn(
-                            "p-3 rounded-full transition-all duration-200 shadow-lg",
+                            "p-2 rounded-full transition-all duration-300",
                             isLiveMode
-                                ? "bg-green-500 text-white animate-pulse ring-4 ring-green-500/30"
+                                ? "bg-red-500/20 text-red-400 hover:bg-red-500/30 animate-pulse"
                                 : "bg-slate-700 text-slate-300 hover:bg-slate-600"
                         )}
-                        title="Live Mode"
+                        title={isLiveMode ? "Stop Live Mode" : "Start Live Mode"}
                     >
-                        <Volume2 size={20} />
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={toggleRecording}
-                        className={cn(
-                            "p-3 rounded-full transition-all duration-200 shadow-lg",
-                            isRecording
-                                ? "bg-red-500 text-white animate-pulse ring-4 ring-red-500/30"
-                                : "bg-slate-700 text-slate-300 hover:bg-slate-600"
-                        )}
-                        disabled={isLoading || isTranscribing || isLiveMode}
-                    >
-                        {isRecording ? <MicOff size={20} /> : <Mic size={20} />}
+                        {isLiveMode ? <Radio size={20} /> : <Mic size={20} />}
                     </button>
 
                     <input
@@ -467,11 +329,11 @@ const ChatInterface = ({ messages, setMessages }) => {
                         onChange={(e) => setInput(e.target.value)}
                         placeholder={isLiveMode ? "Listening..." : "Ask about your inventory or sales..."}
                         className="flex-1 px-4 py-2 rounded-lg border border-slate-600 bg-slate-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        disabled={isLoading || isRecording || isTranscribing || isLiveMode}
+                        disabled={isLoading || isLiveMode}
                     />
                     <button
                         type="submit"
-                        disabled={isLoading || !input.trim() || isRecording || isTranscribing || isLiveMode}
+                        disabled={isLoading || !input.trim() || isLiveMode}
                         className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg"
                     >
                         <Send size={20} />

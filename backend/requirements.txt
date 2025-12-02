@@ -8,3 +8,4 @@ requests
 python-multipart
 Pillow
 websockets
+google-genai
