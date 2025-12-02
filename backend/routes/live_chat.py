@@ -40,8 +40,9 @@ async def websocket_endpoint(websocket: WebSocket):
                             media_chunks = message["realtime_input"]["media_chunks"]
                             for chunk in media_chunks:
                                 # Send audio data to Gemini
-                                # The SDK expects 'data' to be base64 encoded string or bytes
-                                await session.send(input={"mime_type": chunk["mime_type"], "data": chunk["data"]}, end_of_turn=False)
+                                # The SDK expects 'data' to be bytes
+                                audio_bytes = base64.b64decode(chunk["data"])
+                                await session.send(input={"mime_type": chunk["mime_type"], "data": audio_bytes}, end_of_turn=False)
                         
                         # Handle text input (if any)
                         if "client_content" in message:
@@ -58,10 +59,29 @@ async def websocket_endpoint(websocket: WebSocket):
                     while True:
                         async for response in session.receive():
                             # Process response from Gemini and forward to frontend
-                            # We need to map the SDK response to the format expected by frontend
-                            # or update frontend to handle SDK response format.
-                            # For now, let's try to construct a message similar to what we had.
                             
+                            # Handle audio data directly if present (Native Audio)
+                            if response.data:
+                                # Send audio chunk to frontend
+                                # Frontend expects base64 encoded audio in a specific format
+                                # We'll wrap it in the same structure as before for compatibility
+                                b64_data = base64.b64encode(response.data).decode('utf-8')
+                                msg = {
+                                    "serverContent": {
+                                        "modelTurn": {
+                                            "parts": [{
+                                                "inlineData": {
+                                                    "mimeType": "audio/pcm;rate=24000",
+                                                    "data": b64_data
+                                                }
+                                            }]
+                                        }
+                                    }
+                                }
+                                await websocket.send_text(json.dumps(msg))
+                                continue
+
+                            # Handle text/other content if no audio data
                             server_content = {
                                 "modelTurn": {
                                     "parts": []
@@ -73,15 +93,18 @@ async def websocket_endpoint(websocket: WebSocket):
                                     part_data = {}
                                     if part.text:
                                         part_data["text"] = part.text
+                                    # If inline_data is present but response.data wasn't (unlikely for audio mode but possible)
                                     if part.inline_data:
                                         part_data["inlineData"] = {
                                             "mimeType": part.inline_data.mime_type,
                                             "data": base64.b64encode(part.inline_data.data).decode('utf-8') 
                                         }
-                                    server_content["modelTurn"]["parts"].append(part_data)
-
-                            msg = {"serverContent": server_content}
-                            await websocket.send_text(json.dumps(msg))
+                                    if part_data:
+                                        server_content["modelTurn"]["parts"].append(part_data)
+                            
+                            if server_content["modelTurn"]["parts"]:
+                                msg = {"serverContent": server_content}
+                                await websocket.send_text(json.dumps(msg))
 
                 except Exception as e:
                     logger.error(f"Error in send_to_frontend: {e}")
