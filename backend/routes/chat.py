@@ -177,6 +177,18 @@ async def transcribe_audio(file: UploadFile = File(...)):
         myfile = genai.upload_file(temp_path)
         print(f"Uploaded file to Gemini: {myfile.name}")
         
+        # Wait for file to be active
+        import time
+        while myfile.state.name == "PROCESSING":
+            print("Processing audio file...")
+            time.sleep(1)
+            myfile = genai.get_file(myfile.name)
+            
+        if myfile.state.name != "ACTIVE":
+            raise Exception(f"File upload failed with state: {myfile.state.name}")
+
+        print(f"File is active. Generating content...")
+        
         # Generate content using the audio file
         result = model.generate_content([myfile, "Transcribe this audio to text exactly as spoken. If it is in an Indian language, transcribe it in the original script (or transliterated if that's standard for the language, but preference for mixed/hinglish if that's what was spoken). Return ONLY the text."])
         
