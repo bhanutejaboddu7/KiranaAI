@@ -4,7 +4,6 @@ import Layout from './components/Layout';
 import ChatInterface from './components/ChatInterface';
 import Dashboard from './components/Dashboard';
 import StorekeeperView from './components/StorekeeperView';
-import CustomerView from './components/CustomerView';
 import StockManager from './components/StockManager';
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -50,7 +49,6 @@ function App() {
             <Route path="/" element={<ChatInterface messages={messages} setMessages={setMessages} />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/storekeeper" element={<StorekeeperView />} />
-            <Route path="/customer" element={<CustomerView />} />
             <Route path="/stock" element={<StockManager />} />
           </Routes>
         </Layout>

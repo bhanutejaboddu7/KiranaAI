@@ -3,15 +3,21 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import 'highlight.js/styles/github-dark.css'; // Import highlight.js styles
-import { Send, Bot, User, Loader2 } from 'lucide-react';
-import { chatWithData } from '../services/api';
+import { Send, Bot, User, Loader2, Mic, MicOff, Volume2 } from 'lucide-react';
+import { chatWithData, transcribeAudio } from '../services/api';
 import { cn } from '../lib/utils';
 
 const ChatInterface = ({ messages, setMessages }) => {
     // Local state removed, using props now
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [isRecording, setIsRecording] = useState(false);
+    const [isTranscribing, setIsTranscribing] = useState(false);
+    const [isSpeaking, setIsSpeaking] = useState(false);
+
     const messagesEndRef = useRef(null);
+    const mediaRecorderRef = useRef(null);
+    const audioChunksRef = useRef([]);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -19,10 +25,10 @@ const ChatInterface = ({ messages, setMessages }) => {
 
     useEffect(() => {
         scrollToBottom();
-    }, [messages]);
+    }, [messages, isLoading, isTranscribing]);
 
     const handleSend = async (e) => {
-        e.preventDefault();
+        if (e) e.preventDefault();
         if (!input.trim()) return;
 
         const userMessage = input;
@@ -44,6 +50,10 @@ const ChatInterface = ({ messages, setMessages }) => {
                 content: data.response,
                 sql: data.sql_query
             }]);
+
+            // Speak the response
+            speakResponse(data.response);
+
         } catch (error) {
             setMessages(prev => [...prev, {
                 role: 'assistant',
@@ -51,6 +61,117 @@ const ChatInterface = ({ messages, setMessages }) => {
             }]);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const startRecording = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorderRef.current = new MediaRecorder(stream);
+            audioChunksRef.current = [];
+
+            mediaRecorderRef.current.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    audioChunksRef.current.push(event.data);
+                }
+            };
+
+            mediaRecorderRef.current.onstop = async () => {
+                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+                setIsTranscribing(true);
+                try {
+                    const data = await transcribeAudio(audioBlob);
+                    if (data.text) {
+                        setInput(data.text);
+                        // Automatically send after transcription
+                        // We need to use the text directly because setInput is async
+                        // But handleSend uses 'input' state. So we'll call a modified version or just set state and let user send?
+                        // Plan said: "Verify the text appears in the input box and is sent automatically."
+                        // So let's send it.
+
+                        // We can't easily call handleSend because it relies on 'input' state which hasn't updated yet in this closure.
+                        // So we duplicate the send logic slightly or refactor.
+                        // Let's refactor handleSend to accept text optionally.
+                        handleSendWithText(data.text);
+                    }
+                } catch (error) {
+                    console.error("Transcription error:", error);
+                    alert("Failed to transcribe audio.");
+                } finally {
+                    setIsTranscribing(false);
+                }
+
+                // Stop all tracks
+                stream.getTracks().forEach(track => track.stop());
+            };
+
+            mediaRecorderRef.current.start();
+            setIsRecording(true);
+        } catch (error) {
+            console.error("Error accessing microphone:", error);
+            alert("Could not access microphone.");
+        }
+    };
+
+    const stopRecording = () => {
+        if (mediaRecorderRef.current && isRecording) {
+            mediaRecorderRef.current.stop();
+            setIsRecording(false);
+        }
+    };
+
+    const toggleRecording = () => {
+        if (isRecording) {
+            stopRecording();
+        } else {
+            startRecording();
+        }
+    };
+
+    const handleSendWithText = async (text) => {
+        if (!text.trim()) return;
+
+        setMessages(prev => [...prev, { role: 'user', content: text }]);
+        setIsLoading(true);
+
+        try {
+            const history = messages.slice(1).map(msg => ({
+                role: msg.role,
+                content: msg.content
+            }));
+
+            const data = await chatWithData(text, history);
+            setMessages(prev => [...prev, {
+                role: 'assistant',
+                content: data.response,
+                sql: data.sql_query
+            }]);
+            speakResponse(data.response);
+        } catch (error) {
+            setMessages(prev => [...prev, {
+                role: 'assistant',
+                content: "Sorry, I encountered an error processing your request."
+            }]);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const speakResponse = (text) => {
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            // Strip markdown for speech (simple regex to remove some common markdown)
+            const cleanText = text.replace(/[*#`_]/g, '');
+            const utterance = new SpeechSynthesisUtterance(cleanText);
+
+            // Try to find an Indian English voice
+            const voices = window.speechSynthesis.getVoices();
+            const indianVoice = voices.find(v => v.lang.includes('IN'));
+            if (indianVoice) utterance.voice = indianVoice;
+
+            setIsSpeaking(true);
+            utterance.onend = () => setIsSpeaking(false);
+            window.speechSynthesis.speak(utterance);
         }
     };
 
@@ -112,23 +233,45 @@ const ChatInterface = ({ messages, setMessages }) => {
                         </div>
                     </div>
                 )}
+                {isTranscribing && (
+                    <div className="flex gap-3 ml-auto flex-row-reverse">
+                        <div className="bg-slate-800 p-3 rounded-2xl rounded-tr-none border border-slate-700 flex items-center gap-2">
+                            <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+                            <span className="text-xs text-slate-400">Transcribing audio...</span>
+                        </div>
+                    </div>
+                )}
                 <div ref={messagesEndRef} />
             </div>
 
             {/* Input Area */}
             <div className="p-4 border-t border-slate-700 bg-slate-800">
-                <form onSubmit={handleSend} className="flex gap-2">
+                <form onSubmit={handleSend} className="flex gap-2 items-center">
+                    <button
+                        type="button"
+                        onClick={toggleRecording}
+                        className={cn(
+                            "p-3 rounded-full transition-all duration-200 shadow-lg",
+                            isRecording
+                                ? "bg-red-500 text-white animate-pulse ring-4 ring-red-500/30"
+                                : "bg-slate-700 text-slate-300 hover:bg-slate-600"
+                        )}
+                        disabled={isLoading || isTranscribing}
+                    >
+                        {isRecording ? <MicOff size={20} /> : <Mic size={20} />}
+                    </button>
+
                     <input
                         type="text"
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         placeholder="Ask about your inventory or sales..."
                         className="flex-1 px-4 py-2 rounded-lg border border-slate-600 bg-slate-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        disabled={isLoading}
+                        disabled={isLoading || isRecording || isTranscribing}
                     />
                     <button
                         type="submit"
-                        disabled={isLoading || !input.trim()}
+                        disabled={isLoading || !input.trim() || isRecording || isTranscribing}
                         className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg"
                     >
                         <Send size={20} />

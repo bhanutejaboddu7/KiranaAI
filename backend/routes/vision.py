@@ -45,13 +45,18 @@ async def analyze_shelf(file: UploadFile = File(...)):
         image = Image.open(io.BytesIO(contents))
         
         prompt = """
-        Analyze this shelf image. Identify the products visible and their shelf position (e.g., "Top Shelf", "Middle Shelf", "Rack 1").
-        Return the data in a pure JSON format like this:
-        [
-            {"name": "Product Name", "shelf": "Top Shelf"},
-            ...
-        ]
-        Do not include any markdown formatting or explanation. Just the JSON array.
+        You are an Expert Retail Inventory Manager. 
+        Analyze the provided image of a retail shelf and extract the product information into a structured JSON array.
+        
+        The JSON objects must have the following fields:
+        - "name": Identify the product name or type visible on the label or packaging. Be as specific as possible.
+        - "shelf": Identify the shelf number or location code if visible. If not explicitly visible, assign a logical identifier (e.g., "Top Shelf", "Middle Shelf", "Rack 1").
+
+        Exception Handling:
+        - If the image is very blurry, too dark, or the product details are not legible for many of the products to accurately identify the SKU, return a JSON object with a single key "error" and message "Unable to identify products. Please re-upload a clearer image."
+        - If only few products labels are not legible, output the JSON for the products that are legible.
+
+        Return the data in a STRICT JSON array format. Do not include any markdown formatting (like ```json ... ```), explanations, or extra text.
         """
         
         response = model.generate_content([prompt, image])

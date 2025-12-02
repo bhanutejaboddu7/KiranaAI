@@ -13,7 +13,6 @@ const Layout = ({ children }) => {
         { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
         { icon: Store, label: 'Storekeeper', path: '/storekeeper' },
         { icon: Store, label: 'Stock Manager', path: '/stock' },
-        { icon: MessageSquare, label: 'Customer Mode', path: '/customer' },
     ];
 
     return (
