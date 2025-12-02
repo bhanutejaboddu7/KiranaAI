@@ -42,17 +42,7 @@ Your goal is to help the shopkeeper manage their inventory and sales using natur
 """
 
 genai.configure(api_key=api_key)
-
-# Debug: List available models
-try:
-    print("Listing available Gemini models:")
-    for m in genai.list_models():
-        if 'generateContent' in m.supported_generation_methods:
-            print(f"Available model: {m.name}")
-except Exception as e:
-    print(f"Error listing models: {str(e)}")
-
-model = genai.GenerativeModel('gemini-1.5-flash', system_instruction=SYSTEM_PROMPT)
+model = genai.GenerativeModel('gemini-2.5-flash', system_instruction=SYSTEM_PROMPT)
 
 def get_db():
     db = database.SessionLocal()
