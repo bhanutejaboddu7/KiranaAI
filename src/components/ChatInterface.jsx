@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import 'highlight.js/styles/github-dark.css';
 import { Send, Bot, User, Loader2, Mic, X } from 'lucide-react';
-import { chatWithData } from '../services/api';
+import { chatWithData, api } from '../services/api';
 import { cn } from '../lib/utils';
 import {
     LiveKitRoom,
@@ -71,11 +71,8 @@ const ChatInterface = ({ messages, setMessages }) => {
         try {
             setIsLoading(true);
             // Fetch token from backend
-            const response = await fetch('/api/live-chat/token');
-            if (!response.ok) {
-                throw new Error("Failed to fetch token");
-            }
-            const data = await response.json();
+            const response = await api.get('/api/live-chat/token');
+            const data = response.data;
             setToken(data.token);
             setUrl(data.url);
             setIsLiveMode(true);
