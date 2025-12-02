@@ -95,7 +95,8 @@ const ChatInterface = ({ messages, setMessages }) => {
                     }
                 } catch (error) {
                     console.error("Transcription error:", error);
-                    alert("Failed to transcribe audio.");
+                    const errorMessage = error.response?.data?.detail || error.message || "Unknown error";
+                    alert(`Failed to transcribe audio: ${errorMessage}`);
                 } finally {
                     setIsTranscribing(false);
                 }
