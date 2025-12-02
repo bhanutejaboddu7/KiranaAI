@@ -87,8 +87,27 @@ async def websocket_endpoint(websocket: WebSocket):
                     logger.error(f"Error in send_to_frontend: {e}")
 
             # Run both tasks concurrently
-            await asyncio.gather(receive_from_frontend(), send_to_frontend())
+            receive_task = asyncio.create_task(receive_from_frontend())
+            send_task = asyncio.create_task(send_to_frontend())
 
+            done, pending = await asyncio.wait(
+                [receive_task, send_task],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+
+            for task in pending:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+
+    except WebSocketDisconnect:
+        logger.info("WebSocket disconnected")
     except Exception as e:
         logger.error(f"Gemini Live API connection error: {e}")
-        await websocket.close()
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
