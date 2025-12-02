@@ -12,3 +12,4 @@ google-genai
 livekit-agents
 livekit-plugins-google
 livekit-plugins-noise-cancellation
+livekit-api
