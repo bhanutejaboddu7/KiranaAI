@@ -21,6 +21,7 @@ const ChatInterface = ({ messages, setMessages }) => {
     const sourceRef = useRef(null);
     const audioQueueRef = useRef([]);
     const isPlayingRef = useRef(false);
+    const nextStartTimeRef = useRef(0);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -205,13 +206,63 @@ const ChatInterface = ({ messages, setMessages }) => {
         }
         if (audioContextRef.current) {
             audioContextRef.current.close();
+            audioContextRef.current = null;
+        }
+    };
+
+    const MIN_BUFFER_SIZE = 5; // Increased buffer size for stability
+
+    const processAudioQueue = async () => {
+        if (isPlayingRef.current) return;
+
+        const audioCtx = audioContextRef.current;
+        if (!audioCtx) return;
+
+        // Check if we are currently playing audio (tail is in the future)
+        const currentTime = audioCtx.currentTime;
+        const isAudioPlaying = nextStartTimeRef.current > currentTime;
+
+        // If not playing (gap/start), wait for buffer to fill
+        if (!isAudioPlaying && audioQueueRef.current.length < MIN_BUFFER_SIZE) {
+            return;
+        }
+
+        isPlayingRef.current = true;
+
+        while (audioQueueRef.current.length > 0) {
+            const { audioBuffer, audioCtx: ctx } = audioQueueRef.current.shift();
+
+            // Create source
+            const source = ctx.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(ctx.destination);
+
+            // Schedule playback
+            const now = ctx.currentTime;
+            // If we fell behind, reset nextStartTime to now + small buffer
+            if (nextStartTimeRef.current < now) {
+                nextStartTimeRef.current = now + 0.1;
+            }
+
+            const startTime = nextStartTimeRef.current;
+            source.start(startTime);
+
+            // Update next start time
+            nextStartTimeRef.current = startTime + audioBuffer.duration;
+        }
+
+        isPlayingRef.current = false;
+    };
+
+    const playAudioChunk = async (base64Data) => {
+        try {
+            // Initialize AudioContext if not present or closed
             if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
                 audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
                 nextStartTimeRef.current = audioContextRef.current.currentTime;
             }
 
             const audioCtx = audioContextRef.current;
-
             // Decode base64
             const binaryString = atob(base64Data);
             const len = binaryString.length;
