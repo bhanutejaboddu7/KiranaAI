@@ -85,10 +85,7 @@ const ChatInterface = ({ messages, setMessages }) => {
             setIsLoading(true);
 
             // Initialize WebSocket
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}/ws/chat`; // Use relative path for proxy
-            // For local dev with separate backend port, might need full URL if not proxied correctly
-            // const wsUrl = 'ws://10.0.2.2:8000/ws/chat'; // Android Emulator
+            const wsUrl = 'wss://kiranaai.onrender.com/ws/chat';
 
             console.log("Connecting to WebSocket:", wsUrl);
             websocketRef.current = new WebSocket(wsUrl);
