@@ -51,7 +51,9 @@ def get_shop_context():
         return f"{inventory_text}\n{sales_text}"
     except Exception as e:
         logger.error(f"Error fetching shop context: {e}")
-        return "Error fetching shop data."
+        import traceback
+        logger.error(traceback.format_exc())
+        return "Error fetching shop data. Please tell the user you are having trouble accessing the database."
 
 @router.websocket("/ws/chat")
 async def websocket_endpoint(websocket: WebSocket):
@@ -68,6 +70,7 @@ async def websocket_endpoint(websocket: WebSocket):
             
             # Fetch real-time context
             shop_context = get_shop_context()
+            logger.info(f"Injected Context: {shop_context[:100]}...") # Log first 100 chars
             
             # Send system instruction as the first message
             sys_instruction = (
@@ -77,7 +80,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 "Use this data to answer user queries accurately. "
                 "Answer concisely. You MUST reply in the SAME language as the user's input. "
                 "If the user speaks Hindi, reply in Hindi. If Telugu, reply in Telugu. "
-                "Do not output internal thoughts, reasoning steps, or headers like 'Addressing the request'. "
+                "Do NOT output any internal thoughts, headers, or status updates like 'Reporting Data Retrieval Issues'. "
+                "Do NOT say 'I'm currently unable to retrieve data' unless the context explicitly says 'Error fetching shop data'. "
                 "Just provide the final spoken response directly."
             )
             await session.send(input=sys_instruction, end_of_turn=True)
