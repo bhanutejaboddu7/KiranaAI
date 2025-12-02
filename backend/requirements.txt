@@ -9,3 +9,6 @@ python-multipart
 Pillow
 websockets
 google-genai
+livekit-agents
+livekit-plugins-google
+livekit-plugins-noise-cancellation
