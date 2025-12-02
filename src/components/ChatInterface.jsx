@@ -210,7 +210,7 @@ const ChatInterface = ({ messages, setMessages }) => {
         }
     };
 
-    const MIN_BUFFER_SIZE = 10; // Increased buffer size for stability
+    const MIN_BUFFER_SIZE = 3; // Reduced for lower latency
 
     const processAudioQueue = async () => {
         if (isPlayingRef.current) return;
@@ -244,9 +244,10 @@ const ChatInterface = ({ messages, setMessages }) => {
 
             // Schedule playback
             const now = ctx.currentTime;
-            // If we fell behind, reset nextStartTime to now + small buffer
+            // If we fell behind, reset nextStartTime to now + very small buffer
+            // The previous 0.5s was causing "breaking" (stuttering)
             if (nextStartTimeRef.current < now) {
-                nextStartTimeRef.current = now + 0.5; // 500ms buffer for smoother catch-up
+                nextStartTimeRef.current = now + 0.02; // 20ms buffer for smooth catch-up
             }
 
             const startTime = nextStartTimeRef.current;

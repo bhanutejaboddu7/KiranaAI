@@ -79,9 +79,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 "Use this data to answer user queries accurately. "
                 "Answer concisely. You MUST reply in the SAME language as the user's input. "
                 "If the user speaks Hindi, reply in Hindi. If Telugu, reply in Telugu. "
-                "Do NOT output any internal thoughts, headers, or status updates like 'Reporting Data Retrieval Issues'. "
-                "Do NOT say 'I'm currently unable to retrieve data' unless the context explicitly says 'Error fetching shop data'. "
-                "Just provide the final spoken response directly."
+                "CRITICAL: You are a voice assistant. Do NOT output any internal thoughts, headers, or status updates like 'Reviewing the Shop Status'. "
+                "Do NOT narrate your actions. Do NOT use markdown formatting like bold or headers. "
+                "Just provide the final spoken response directly and naturally."
             )
             await session.send(input=sys_instruction, end_of_turn=True)
 
