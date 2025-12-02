@@ -1,3 +1,26 @@
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from google import genai
+import os
+import asyncio
+import json
+import logging
+import base64
+from datetime import datetime
+from ..database import get_db_connection
+from ..models import Product, Sale
+from sqlalchemy.orm import Session
+from sqlalchemy import func
+
+router = APIRouter()
+logger = logging.getLogger("live_chat")
+
+# Initialize Gemini Client
+# Ensure GEMINI_API_KEY is set in environment variables
+api_key = os.environ.get("GEMINI_API_KEY")
+client = genai.Client(api_key=api_key, http_options={"api_version": "v1alpha"})
+
+MODEL = "gemini-2.5-flash-native-audio-preview-09-2025"
+
 def get_shop_context():
     """Fetches a summary of inventory and recent sales for context."""
     try:
