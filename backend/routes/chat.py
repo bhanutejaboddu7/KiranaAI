@@ -171,7 +171,11 @@ async def transcribe_audio(file: UploadFile = File(...)):
             tmp.write(content)
             temp_path = tmp.name
             
-        print(f"Saved temp audio file to: {temp_path}")
+        file_size = os.path.getsize(temp_path)
+        print(f"Saved temp audio file to: {temp_path} (Size: {file_size} bytes)")
+        
+        if file_size == 0:
+            raise HTTPException(status_code=400, detail="Uploaded audio file is empty")
 
         # Upload the file to Gemini
         myfile = genai.upload_file(temp_path)
