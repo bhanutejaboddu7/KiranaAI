@@ -296,10 +296,12 @@ const ChatInterface = ({ messages, setMessages }) => {
 
     const playAudioChunk = async (base64Data) => {
         try {
+            console.log("playAudioChunk called, data length:", base64Data.length);
             // Initialize AudioContext if not present or closed
             if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
                 audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
                 nextStartTimeRef.current = audioContextRef.current.currentTime;
+                console.log("Created new AudioContext");
             }
 
             const audioCtx = audioContextRef.current;
@@ -323,8 +325,11 @@ const ChatInterface = ({ messages, setMessages }) => {
             const audioBuffer = audioCtx.createBuffer(1, float32Array.length, 24000);
             audioBuffer.getChannelData(0).set(float32Array);
 
+            console.log("Audio buffer created, duration:", audioBuffer.duration, "seconds");
+
             // Add to queue
             audioQueueRef.current.push({ audioBuffer, audioCtx });
+            console.log("Added to queue, total in queue:", audioQueueRef.current.length);
 
             // Trigger processing if not already playing and we have enough buffer
             // Or if we are already "streaming" (nextStartTime is in future), we can just push and let the loop handle it?
