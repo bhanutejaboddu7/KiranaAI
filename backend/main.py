@@ -34,6 +34,15 @@ def trigger_seed():
     except Exception as e:
         return {"message": f"Seeding failed: {str(e)}"}
 
+@app.get("/seed")
+def seed_database():
+    from backend.seed_data import seed_data
+    try:
+        seed_data()
+        return {"message": "Database seeded successfully!"}
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.get("/")
 def read_root():
     return {"message": "Kirana Shop API is running"}
