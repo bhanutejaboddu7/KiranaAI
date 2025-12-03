@@ -418,7 +418,7 @@ const ChatInterface = ({ messages, setMessages }) => {
             </div>
 
             {/* Input Area */}
-            <div className="p-3 bg-background/80 backdrop-blur-xl border-t border-border sticky bottom-0 z-20 pb-safe-nav md:pb-4">
+            <div className="p-3 bg-background/80 backdrop-blur-xl border-t border-border sticky bottom-0 z-20 pb-[calc(env(safe-area-inset-bottom,0px)+3.5rem)] md:pb-4">
                 <form onSubmit={handleSend} className="flex gap-2 items-end max-w-4xl mx-auto">
                     <button
                         type="button"

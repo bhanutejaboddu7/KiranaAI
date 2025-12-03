@@ -87,7 +87,7 @@ const StorekeeperView = () => {
         <div className="flex flex-col h-full bg-background relative font-sans">
             {/* Top Navigation Tabs */}
             <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border pt-safe">
-                <div className="px-4 py-3">
+                <div className="px-2 py-3">
                     <div className="flex items-center justify-between mb-4">
                         <h1 className="text-2xl font-bold tracking-tight text-foreground">Store Management</h1>
                         <button
@@ -123,7 +123,7 @@ const StorekeeperView = () => {
 
                 {/* Screen 1: Catalog */}
                 {activeTab === 'catalog' && (
-                    <div className="p-4 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                    <div className="px-2 py-4 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
                         {/* Search & Filter */}
                         <div className="space-y-3">
                             <div className="flex items-center gap-2 bg-card p-3 rounded-xl shadow-sm border border-border focus-within:ring-2 focus-within:ring-primary/20 transition-all">
@@ -194,7 +194,7 @@ const StorekeeperView = () => {
 
                 {/* Screen 2: Inventory Shortfall */}
                 {activeTab === 'shortfall' && (
-                    <div className="p-4 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                    <div className="px-2 py-4 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
                         <div className="flex items-center gap-2 mb-2">
                             <AlertTriangle className="text-red-500" size={20} />
                             <h2 className="text-lg font-bold text-foreground">Low Stock Alerts</h2>
@@ -233,7 +233,7 @@ const StorekeeperView = () => {
 
                 {/* Screen 3: Live Prices */}
                 {activeTab === 'prices' && (
-                    <div className="p-4 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                    <div className="px-2 py-4 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
                         <div className="flex items-center gap-2 mb-2">
                             <TrendingUp className="text-green-500" size={20} />
                             <h2 className="text-lg font-bold text-foreground">Market Intelligence</h2>
