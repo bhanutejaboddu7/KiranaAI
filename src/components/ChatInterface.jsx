@@ -260,7 +260,7 @@ const ChatInterface = ({ messages, setMessages }) => {
                 <div className="absolute inset-0 z-50 bg-black flex flex-col items-center justify-center transition-all duration-500 animate-in fade-in">
 
                     {/* Top Controls */}
-                    <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center">
+                    <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-10">
                         <div className="flex items-center gap-2 text-white/70">
                             <Sparkles size={18} className="text-indigo-400" />
                             <span className="text-sm font-medium tracking-wide">Gemini Live</span>
