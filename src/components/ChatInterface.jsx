@@ -8,6 +8,7 @@ import { chatWithData, sendVoiceMessage } from '../services/api';
 import { cn } from '../lib/utils';
 import { SpeechRecognition } from '@capacitor-community/speech-recognition';
 import { Capacitor } from '@capacitor/core';
+import ThemeToggle from './ThemeToggle';
 
 const ChatInterface = ({ messages, setMessages }) => {
     const [input, setInput] = useState('');
@@ -232,42 +233,46 @@ const ChatInterface = ({ messages, setMessages }) => {
     };
 
     return (
-        <div className="flex flex-col h-[calc(100dvh-4rem)] md:h-[calc(100vh-8rem)] bg-slate-50 dark:bg-slate-900 md:rounded-2xl md:shadow-xl md:border border-slate-200 dark:border-slate-800 overflow-hidden relative font-sans">
+        <div className="flex flex-col h-full bg-background md:rounded-2xl md:shadow-xl md:border border-border overflow-hidden relative font-sans">
 
             {/* Header - Mobile Only */}
-            <div className="md:hidden absolute top-0 left-0 right-0 h-14 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 z-10 flex items-center px-4 justify-between">
-                <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-lg">
-                        <Bot size={18} />
+            <div className="md:hidden absolute top-0 left-0 right-0 pt-safe h-[calc(3.5rem+env(safe-area-inset-top))] bg-background/80 backdrop-blur-md border-b border-border z-10 flex items-center px-4 justify-between transition-all duration-300">
+                <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-primary to-purple-600 flex items-center justify-center text-primary-foreground shadow-lg shadow-primary/20">
+                        <Bot size={20} />
                     </div>
                     <div>
-                        <h3 className="font-bold text-slate-800 dark:text-white text-sm">Kirana Assistant</h3>
-                        <p className="text-xs text-green-500 flex items-center gap-1">
+                        <h3 className="font-bold text-foreground text-sm">Kirana Assistant</h3>
+                        <p className="text-[10px] font-medium text-green-500 flex items-center gap-1.5 bg-green-500/10 px-2 py-0.5 rounded-full w-fit">
                             <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> Online
                         </p>
                     </div>
                 </div>
-                <button
-                    onClick={() => setIsLiveMode(true)}
-                    className="p-2 bg-indigo-50 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 rounded-full hover:bg-indigo-100 transition-colors"
-                >
-                    <Mic size={20} />
-                </button>
+                <div className="flex items-center gap-2">
+                    <ThemeToggle />
+                    <button
+                        onClick={() => setIsLiveMode(true)}
+                        className="p-2.5 bg-primary/10 text-primary rounded-full hover:bg-primary/20 transition-colors active:scale-95"
+                    >
+                        <Mic size={20} />
+                    </button>
+                </div>
             </div>
 
             {/* Gemini Live Style Overlay */}
+            {/* Gemini Live Style Overlay */}
             {isLiveMode && (
-                <div className="absolute inset-0 z-50 bg-black flex flex-col items-center justify-center transition-all duration-500 animate-in fade-in">
+                <div className="absolute inset-0 z-50 bg-background/95 backdrop-blur-xl flex flex-col items-center justify-center transition-all duration-500 animate-in fade-in">
 
                     {/* Top Controls */}
-                    <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-10">
-                        <div className="flex items-center gap-2 text-white/70">
-                            <Sparkles size={18} className="text-indigo-400" />
+                    <div className="absolute top-0 left-0 right-0 p-6 pt-safe flex justify-between items-center z-10">
+                        <div className="flex items-center gap-2 text-foreground/70">
+                            <Sparkles size={18} className="text-primary" />
                             <span className="text-sm font-medium tracking-wide">Gemini Live</span>
                         </div>
                         <button
                             onClick={() => setIsLiveMode(false)}
-                            className="p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors backdrop-blur-md"
+                            className="p-3 bg-muted hover:bg-muted/80 rounded-full text-foreground transition-colors"
                         >
                             <X size={24} />
                         </button>
@@ -278,7 +283,7 @@ const ChatInterface = ({ messages, setMessages }) => {
 
                         {/* Status Text */}
                         <div className="absolute top-1/4 text-center space-y-2 animate-in slide-in-from-bottom-4 duration-700">
-                            <h2 className="text-2xl md:text-3xl font-semibold text-white tracking-tight">
+                            <h2 className="text-2xl md:text-3xl font-semibold text-foreground tracking-tight">
                                 {isProcessing ? "Thinking..." : isSpeakingState ? "Hearing Voice..." : "Listening..."}
                             </h2>
                         </div>
@@ -289,7 +294,7 @@ const ChatInterface = ({ messages, setMessages }) => {
                             <div
                                 className={cn(
                                     "absolute w-32 h-32 rounded-full blur-3xl transition-all duration-100", // Faster transition for volume
-                                    isRecording ? (isSpeakingState ? "bg-green-500/60" : "bg-indigo-500/60") : "bg-blue-500/40",
+                                    isRecording ? (isSpeakingState ? "bg-primary/60" : "bg-primary/40") : "bg-secondary/40",
                                     isProcessing && "bg-purple-500/60 animate-pulse"
                                 )}
                                 style={{
@@ -300,10 +305,10 @@ const ChatInterface = ({ messages, setMessages }) => {
                             {/* Outer Rings */}
                             <div className={cn(
                                 "absolute inset-0 border-2 rounded-full opacity-20 transition-all duration-1000",
-                                isRecording ? "border-indigo-400 animate-ping-slow" : "border-slate-500 scale-90"
+                                isRecording ? "border-primary animate-ping-slow" : "border-muted-foreground scale-90"
                             )} />
                             <div className={cn(
-                                "absolute inset-0 border border-white/10 rounded-full scale-150 opacity-10",
+                                "absolute inset-0 border border-primary/10 rounded-full scale-150 opacity-10",
                                 isRecording && "animate-spin-slow"
                             )} />
 
@@ -313,14 +318,14 @@ const ChatInterface = ({ messages, setMessages }) => {
                                 isRecording ? "scale-110" : "scale-100"
                             )}>
                                 {isProcessing ? (
-                                    <Loader2 size={40} className="text-white animate-spin" />
+                                    <Loader2 size={40} className="text-primary animate-spin" />
                                 ) : (
                                     <div className="flex gap-1 h-8 items-center">
                                         {[...Array(5)].map((_, i) => (
                                             <div
                                                 key={i}
                                                 className={cn(
-                                                    "w-1.5 bg-white rounded-full transition-all duration-200",
+                                                    "w-1.5 bg-foreground rounded-full transition-all duration-200",
                                                     isRecording ? "animate-wave" : "h-1.5 opacity-50"
                                                 )}
                                                 style={{
@@ -339,7 +344,7 @@ const ChatInterface = ({ messages, setMessages }) => {
                     <div className="p-8 w-full flex justify-center pb-safe">
                         <button
                             onClick={() => setIsLiveMode(false)}
-                            className="px-8 py-3 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 font-medium hover:bg-red-500/30 transition-colors"
+                            className="px-8 py-3 rounded-full bg-destructive/10 text-destructive border border-destructive/20 font-medium hover:bg-destructive/20 transition-colors"
                         >
                             End Session
                         </button>
@@ -348,29 +353,29 @@ const ChatInterface = ({ messages, setMessages }) => {
             )}
 
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-4 pt-20 md:pt-4 space-y-6 scroll-smooth no-scrollbar">
+            <div className="flex-1 overflow-y-auto p-4 pt-[calc(4rem+env(safe-area-inset-top))] md:pt-4 space-y-6 scroll-smooth no-scrollbar">
                 {messages.map((msg, index) => (
                     <div
                         key={index}
                         className={cn(
-                            "flex gap-4 max-w-[90%] md:max-w-[80%] animate-in slide-in-from-bottom-2 duration-300",
+                            "flex gap-3 max-w-[90%] md:max-w-[80%] animate-in slide-in-from-bottom-2 duration-300",
                             msg.role === 'user' ? "ml-auto flex-row-reverse" : ""
                         )}
                     >
                         <div className={cn(
-                            "w-10 h-10 rounded-full flex items-center justify-center shrink-0 shadow-lg border-2 border-white dark:border-slate-700",
+                            "w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-sm border border-border",
                             msg.role === 'user'
-                                ? "bg-gradient-to-br from-blue-500 to-blue-600 text-white"
-                                : "bg-gradient-to-br from-indigo-500 to-purple-500 text-white"
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-card text-foreground"
                         )}>
-                            {msg.role === 'user' ? <User size={20} /> : <Bot size={20} />}
+                            {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
                         </div>
 
                         <div className={cn(
-                            "p-4 rounded-2xl text-[15px] shadow-sm leading-relaxed",
+                            "p-3.5 rounded-2xl text-[15px] shadow-sm leading-relaxed",
                             msg.role === 'user'
-                                ? "bg-blue-600 text-white rounded-tr-none shadow-blue-500/20"
-                                : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-tl-none border border-slate-100 dark:border-slate-700 shadow-slate-200/50 dark:shadow-none"
+                                ? "bg-primary text-primary-foreground rounded-tr-sm"
+                                : "bg-card text-card-foreground rounded-tl-sm border border-border"
                         )}>
                             <div className="prose prose-sm prose-invert max-w-none">
                                 <ReactMarkdown
@@ -378,15 +383,15 @@ const ChatInterface = ({ messages, setMessages }) => {
                                     rehypePlugins={[rehypeHighlight]}
                                     components={{
                                         table: ({ node, ...props }) => (
-                                            <div className="overflow-x-auto my-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 shadow-inner">
-                                                <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700" {...props} />
+                                            <div className="overflow-x-auto my-3 rounded-lg border border-border bg-muted/50 shadow-inner">
+                                                <table className="min-w-full divide-y divide-border" {...props} />
                                             </div>
                                         ),
-                                        thead: ({ node, ...props }) => <thead className="bg-slate-100 dark:bg-slate-800" {...props} />,
-                                        th: ({ node, ...props }) => <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider" {...props} />,
-                                        tbody: ({ node, ...props }) => <tbody className="divide-y divide-slate-200 dark:divide-slate-700" {...props} />,
-                                        tr: ({ node, ...props }) => <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors" {...props} />,
-                                        td: ({ node, ...props }) => <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap" {...props} />,
+                                        thead: ({ node, ...props }) => <thead className="bg-muted" {...props} />,
+                                        th: ({ node, ...props }) => <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider" {...props} />,
+                                        tbody: ({ node, ...props }) => <tbody className="divide-y divide-border" {...props} />,
+                                        tr: ({ node, ...props }) => <tr className="hover:bg-muted/50 transition-colors" {...props} />,
+                                        td: ({ node, ...props }) => <td className="px-4 py-3 text-sm text-foreground whitespace-nowrap" {...props} />,
                                         p: ({ node, ...props }) => <p className="mb-2 last:mb-0" {...props} />,
                                         ul: ({ node, ...props }) => <ul className="list-disc pl-4 mb-2 space-y-1" {...props} />,
                                         ol: ({ node, ...props }) => <ol className="list-decimal pl-4 mb-2 space-y-1" {...props} />,
@@ -400,12 +405,12 @@ const ChatInterface = ({ messages, setMessages }) => {
                 ))}
                 {isLoading && (
                     <div className="flex gap-4 animate-in fade-in duration-300">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 text-white flex items-center justify-center shrink-0 shadow-lg">
-                            <Bot size={20} />
+                        <div className="w-8 h-8 rounded-xl bg-card text-foreground flex items-center justify-center shrink-0 shadow-sm border border-border">
+                            <Bot size={16} />
                         </div>
-                        <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl rounded-tl-none border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-3">
-                            <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
-                            <span className="text-sm text-slate-500">Thinking...</span>
+                        <div className="bg-card p-4 rounded-2xl rounded-tl-sm border border-border shadow-sm flex items-center gap-3">
+                            <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                            <span className="text-sm text-muted-foreground">Thinking...</span>
                         </div>
                     </div>
                 )}
@@ -413,37 +418,35 @@ const ChatInterface = ({ messages, setMessages }) => {
             </div>
 
             {/* Input Area */}
-            <div className="p-4 bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800 sticky bottom-0 z-20 pb-safe">
-                <form onSubmit={handleSend} className="flex gap-3 items-center max-w-4xl mx-auto">
+            <div className="p-3 bg-background/80 backdrop-blur-xl border-t border-border sticky bottom-0 z-20 pb-safe-nav md:pb-4">
+                <form onSubmit={handleSend} className="flex gap-2 items-end max-w-4xl mx-auto">
                     <button
                         type="button"
                         onClick={() => setIsLiveMode(true)}
-                        className="p-3 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-xl transition-all duration-200 active:scale-95 hidden md:flex"
+                        className="p-3 text-primary bg-primary/10 hover:bg-primary/20 rounded-xl transition-all duration-200 active:scale-95 hidden md:flex"
                         title="Live Mode"
                     >
                         <Mic size={22} />
                     </button>
-                    <div className="flex-1 relative">
+                    <div className="flex-1 relative bg-muted/50 rounded-2xl border border-transparent focus-within:border-primary/50 focus-within:bg-background transition-all duration-200">
                         <input
                             type="text"
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            placeholder="Ask about inventory, sales, or prices..."
-                            className="w-full pl-5 pr-12 py-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all shadow-sm"
+                            placeholder="Ask anything..."
+                            className="w-full pl-4 pr-12 py-3.5 bg-transparent text-foreground placeholder-muted-foreground focus:outline-none rounded-2xl"
                             disabled={isLoading}
                         />
                         <button
                             type="submit"
                             disabled={isLoading || !input.trim()}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg active:scale-95"
+                            className="absolute right-1.5 bottom-1.5 p-2 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm active:scale-95"
                         >
                             <Send size={18} />
                         </button>
                     </div>
                 </form>
             </div>
-
-
         </div>
     );
 };

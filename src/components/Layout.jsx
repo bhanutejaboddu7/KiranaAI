@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { MessageSquare, LayoutDashboard, Store, Menu, X } from 'lucide-react';
+import { MessageSquare, LayoutDashboard, Store, Menu, X, Package } from 'lucide-react';
 import { cn } from '../lib/utils';
+import ThemeToggle from './ThemeToggle';
 
 const Layout = ({ children }) => {
     const location = useLocation();
@@ -11,88 +12,104 @@ const Layout = ({ children }) => {
     const navItems = [
         { icon: MessageSquare, label: 'Chat', path: '/' },
         { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
-        { icon: Store, label: 'Storekeeper', path: '/storekeeper' },
-        { icon: Store, label: 'Stock Manager', path: '/stock' },
+        { icon: Store, label: 'Store', path: '/storekeeper' },
+        { icon: Package, label: 'Stock', path: '/stock' },
     ];
 
     return (
-        <div className="flex h-screen bg-gray-50 dark:bg-gray-900 font-sans">
-            {/* Mobile Sidebar Overlay */}
-            {isSidebarOpen && (
-                <div
-                    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden transition-opacity"
-                    onClick={() => setIsSidebarOpen(false)}
-                />
-            )}
-
-            {/* Sidebar */}
-            <div className={cn(
-                "fixed inset-y-0 left-0 z-50 w-72 bg-gradient-to-b from-primary to-indigo-900 text-white shadow-2xl transition-transform duration-300 ease-out md:relative md:translate-x-0",
-                isSidebarOpen ? "translate-x-0" : "-translate-x-full"
-            )}>
-                <div className="p-8 flex items-center justify-between">
-                    <h1 className="text-3xl font-extrabold tracking-tight flex items-center gap-3 text-white">
-                        <Store className="w-8 h-8 text-secondary" />
+        <div className="flex h-screen bg-background font-sans overflow-hidden">
+            {/* Desktop Sidebar */}
+            <div className="hidden md:flex flex-col w-72 bg-card border-r border-border shadow-sm z-50">
+                <div className="p-6 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground shadow-lg shadow-primary/20">
+                        <Store className="w-6 h-6" />
+                    </div>
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground">
                         KiranaAI
                     </h1>
-                    <button
-                        onClick={() => setIsSidebarOpen(false)}
-                        className="md:hidden p-2 hover:bg-white/10 rounded-full transition-colors"
-                    >
-                        <X size={24} />
-                    </button>
                 </div>
-                <nav className="px-6 space-y-3">
+
+                <nav className="flex-1 px-4 space-y-2 py-4">
                     {navItems.map((item) => (
                         <Link
                             key={item.path}
                             to={item.path}
-                            onClick={() => setIsSidebarOpen(false)}
                             className={cn(
-                                "flex items-center gap-4 px-6 py-4 rounded-xl transition-all duration-200 group",
+                                "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group",
                                 location.pathname === item.path
-                                    ? "bg-white text-blue-600 shadow-lg font-bold transform scale-105"
-                                    : "text-gray-100 hover:bg-white/10 hover:translate-x-1"
+                                    ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
+                                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
                             )}
                         >
-                            <item.icon className={cn("w-6 h-6", location.pathname === item.path ? "text-primary" : "text-gray-300 group-hover:text-white")} />
-                            <span className="text-lg">{item.label}</span>
+                            <item.icon className={cn("w-5 h-5", location.pathname === item.path ? "text-primary-foreground" : "text-muted-foreground group-hover:text-foreground")} />
+                            <span className="font-medium">{item.label}</span>
                         </Link>
                     ))}
                 </nav>
 
-                <div className="absolute bottom-8 left-0 right-0 px-6">
-                    <div className="bg-white/10 rounded-2xl p-4 backdrop-blur-md border border-white/10">
-                        <p className="text-xs text-gray-300 mb-1">Status</p>
-                        <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                            <span className="text-sm font-medium">System Online</span>
+                <div className="p-4 mt-auto space-y-4">
+                    <div className="flex items-center justify-between px-2">
+                        <span className="text-sm font-medium text-muted-foreground">Theme</span>
+                        <ThemeToggle />
+                    </div>
+                    <div className="bg-muted/50 rounded-2xl p-4 border border-border">
+                        <div className="flex items-center gap-3">
+                            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.5)]" />
+                            <span className="text-sm font-medium text-muted-foreground">System Online</span>
                         </div>
                     </div>
                 </div>
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 overflow-auto flex flex-col bg-gray-50/50">
-                {/* Mobile Header */}
-                <div className="md:hidden pt-[calc(env(safe-area-inset-top)+1rem)] pb-4 px-4 bg-white/80 backdrop-blur-md border-b border-gray-200 sticky top-0 z-30 flex items-center justify-between shadow-sm">
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={() => setIsSidebarOpen(true)}
-                            className="p-2 hover:bg-gray-100 rounded-xl text-gray-700"
-                        >
-                            <Menu size={24} />
-                        </button>
-                        <h1 className="text-xl font-bold text-primary">KiranaAI</h1>
+            <div className="flex-1 flex flex-col h-full relative w-full">
+                {/* Mobile Header (Only for non-chat pages) */}
+                {location.pathname !== '/' && (
+                    <div className="md:hidden pt-safe px-4 pb-2 bg-background/80 backdrop-blur-xl border-b border-border z-30 flex items-center justify-between sticky top-0">
+                        <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground">
+                                <Store className="w-5 h-5" />
+                            </div>
+                            <h1 className="text-lg font-bold text-foreground">KiranaAI</h1>
+                        </div>
+                        <ThemeToggle />
                     </div>
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-secondary" />
+                )}
+
+                <div className="flex-1 overflow-y-auto overflow-x-hidden pb-24 md:pb-0 scroll-smooth">
+                    <div className={cn(
+                        "w-full h-full mx-auto animate-in fade-in duration-300 slide-in-from-bottom-4",
+                        location.pathname === '/' ? "" : "p-4 md:p-8 max-w-7xl"
+                    )}>
+                        {children}
+                    </div>
                 </div>
 
-                <div className={cn(
-                    "md:p-8 max-w-7xl mx-auto w-full animate-in fade-in duration-500",
-                    location.pathname === '/' ? "p-0" : "p-4"
-                )}>
-                    {children}
+                {/* Mobile Bottom Navigation */}
+                <div className="md:hidden fixed bottom-0 left-0 right-0 bg-background/80 backdrop-blur-xl border-t border-border pb-safe z-50">
+                    <div className="flex items-center justify-around px-2 py-2">
+                        {navItems.map((item) => {
+                            const isActive = location.pathname === item.path;
+                            return (
+                                <Link
+                                    key={item.path}
+                                    to={item.path}
+                                    className={cn(
+                                        "flex flex-col items-center justify-center w-full py-2 rounded-xl transition-all duration-300 active:scale-95",
+                                        isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                                    )}
+                                >
+                                    <div className={cn(
+                                        "p-1.5 rounded-full transition-all duration-300 mb-1",
+                                        isActive ? "bg-primary/10" : "bg-transparent"
+                                    )}>
+                                        <item.icon className={cn("w-6 h-6", isActive && "fill-current")} strokeWidth={isActive ? 2.5 : 2} />
+                                    </div>
+                                    <span className="text-[10px] font-medium tracking-wide">{item.label}</span>
+                                </Link>
+                            );
+                        })}
+                    </div>
                 </div>
             </div>
         </div>

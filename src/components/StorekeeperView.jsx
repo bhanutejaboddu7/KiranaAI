@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
     Home,
     AlertTriangle,
@@ -9,7 +9,9 @@ import {
     ArrowUpRight,
     ArrowDownRight,
     Package,
-    ShoppingCart
+    ShoppingCart,
+    ChevronRight,
+    MoreVertical
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -61,39 +63,61 @@ const StorekeeperView = () => {
     });
 
     return (
-        <div className="flex flex-col h-[calc(100dvh-4rem)] md:h-[calc(100vh-8rem)] bg-slate-50 relative font-sans">
+        <div className="flex flex-col h-full bg-background relative font-sans">
+            {/* Top Navigation Tabs */}
+            <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border pt-safe">
+                <div className="px-4 py-3">
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground mb-4">Store Management</h1>
+                    <div className="flex p-1 bg-muted/50 rounded-xl">
+                        {['catalog', 'shortfall', 'prices'].map((tab) => (
+                            <button
+                                key={tab}
+                                onClick={() => setActiveTab(tab)}
+                                className={cn(
+                                    "flex-1 py-2 text-sm font-medium rounded-lg transition-all duration-200 capitalize",
+                                    activeTab === tab
+                                        ? "bg-background text-foreground shadow-sm"
+                                        : "text-muted-foreground hover:text-foreground"
+                                )}
+                            >
+                                {tab === 'shortfall' ? 'Alerts' : tab}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </div>
 
             {/* Main Content Area */}
-            <div className="flex-1 overflow-y-auto pb-20 no-scrollbar">
+            <div className="flex-1 overflow-y-auto pb-safe-nav">
 
                 {/* Screen 1: Catalog */}
                 {activeTab === 'catalog' && (
-                    <div className="p-4 space-y-4">
-                        {/* Sticky Header */}
-                        <div className="sticky top-0 bg-slate-50 z-10 pb-2 space-y-3">
-                            <div className="flex items-center gap-2 bg-white p-3 rounded-xl shadow-sm border border-slate-200">
-                                <Search size={20} className="text-slate-400" />
+                    <div className="p-4 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                        {/* Search & Filter */}
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-2 bg-card p-3 rounded-xl shadow-sm border border-border focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+                                <Search size={20} className="text-muted-foreground" />
                                 <input
                                     type="text"
                                     placeholder="Search products..."
-                                    className="flex-1 outline-none text-slate-700 placeholder-slate-400"
+                                    className="flex-1 outline-none bg-transparent text-foreground placeholder-muted-foreground"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                 />
-                                <Filter size={18} className="text-slate-400" />
+                                <Filter size={18} className="text-muted-foreground" />
                             </div>
 
                             {/* Category Pills */}
-                            <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                            <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
                                 {CATEGORIES.map(cat => (
                                     <button
                                         key={cat}
                                         onClick={() => setSelectedCategory(cat)}
                                         className={cn(
-                                            "px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors",
+                                            "px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all active:scale-95",
                                             selectedCategory === cat
-                                                ? "bg-indigo-600 text-white shadow-md shadow-indigo-200"
-                                                : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+                                                ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
+                                                : "bg-card text-muted-foreground border border-border hover:bg-muted"
                                         )}
                                     >
                                         {cat}
@@ -103,25 +127,23 @@ const StorekeeperView = () => {
                         </div>
 
                         {/* Product Grid */}
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 gap-3">
                             {filteredProducts.map(product => (
-                                <div key={product.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col gap-2">
-                                    <div className="w-full h-24 bg-slate-50 rounded-lg flex items-center justify-center text-4xl mb-1">
+                                <div key={product.id} className="bg-card p-4 rounded-2xl shadow-sm border border-border flex items-center gap-4 active:scale-[0.99] transition-transform">
+                                    <div className="w-16 h-16 bg-muted/50 rounded-xl flex items-center justify-center text-3xl shrink-0">
                                         {product.image}
                                     </div>
-                                    <div className="flex-1">
-                                        <h3 className="font-semibold text-slate-800 line-clamp-2 leading-tight">{product.name}</h3>
-                                        <p className="text-xs text-slate-500 mt-1">{product.category}</p>
-                                    </div>
-                                    <div className="flex justify-between items-end mt-2">
-                                        <div>
-                                            <p className="text-xs text-slate-400">Stock: {product.stock}</p>
-                                            <p className="font-bold text-indigo-600">₹{product.price}</p>
+                                    <div className="flex-1 min-w-0">
+                                        <h3 className="font-semibold text-foreground truncate">{product.name}</h3>
+                                        <p className="text-xs text-muted-foreground">{product.category}</p>
+                                        <div className="flex items-center gap-3 mt-1.5">
+                                            <span className="text-sm font-bold text-primary">₹{product.price}</span>
+                                            <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-md">Stock: {product.stock}</span>
                                         </div>
-                                        <button className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors">
-                                            <Plus size={18} />
-                                        </button>
                                     </div>
+                                    <button className="p-2.5 bg-primary/10 text-primary rounded-xl hover:bg-primary/20 transition-colors">
+                                        <Plus size={20} />
+                                    </button>
                                 </div>
                             ))}
                         </div>
@@ -130,34 +152,37 @@ const StorekeeperView = () => {
 
                 {/* Screen 2: Inventory Shortfall */}
                 {activeTab === 'shortfall' && (
-                    <div className="p-4 space-y-4">
-                        <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                            <AlertTriangle className="text-red-500" /> Low Stock Alerts
-                        </h2>
+                    <div className="p-4 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                        <div className="flex items-center gap-2 mb-2">
+                            <AlertTriangle className="text-red-500" size={20} />
+                            <h2 className="text-lg font-bold text-foreground">Low Stock Alerts</h2>
+                        </div>
 
                         <div className="space-y-3">
                             {MOCK_SHORTFALL.map(item => (
                                 <div key={item.id} className={cn(
-                                    "bg-white p-4 rounded-xl border-l-4 shadow-sm flex justify-between items-center",
-                                    item.status === 'critical' ? "border-l-red-500" : "border-l-yellow-500"
+                                    "bg-card p-4 rounded-2xl border-l-4 shadow-sm flex justify-between items-center",
+                                    item.status === 'critical' ? "border-l-red-500" : "border-l-orange-500"
                                 )}>
                                     <div>
-                                        <h3 className="font-semibold text-slate-800">{item.name}</h3>
-                                        <div className="flex gap-4 mt-1 text-sm">
-                                            <p className="text-slate-500">Current: <span className="font-bold text-slate-800">{item.current}</span></p>
-                                            <p className="text-slate-400">Reorder: {item.reorder}</p>
+                                        <h3 className="font-semibold text-foreground">{item.name}</h3>
+                                        <div className="flex gap-3 mt-1 text-sm">
+                                            <p className="text-muted-foreground">Current: <span className="font-bold text-foreground">{item.current}</span></p>
+                                            <p className="text-muted-foreground">Reorder: {item.reorder}</p>
                                         </div>
                                     </div>
-                                    <button className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg shadow-sm hover:bg-indigo-700 active:scale-95 transition-all">
+                                    <button className="px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-xl shadow-sm shadow-primary/20 hover:bg-primary/90 active:scale-95 transition-all">
                                         Restock
                                     </button>
                                 </div>
                             ))}
                         </div>
 
-                        <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mt-6">
-                            <h3 className="font-semibold text-blue-800 mb-2">Smart Suggestion</h3>
-                            <p className="text-sm text-blue-600 leading-relaxed">
+                        <div className="bg-blue-500/10 p-5 rounded-2xl border border-blue-500/20 mt-6">
+                            <h3 className="font-semibold text-blue-600 dark:text-blue-400 mb-2 flex items-center gap-2">
+                                <TrendingUp size={16} /> Smart Suggestion
+                            </h3>
+                            <p className="text-sm text-blue-700 dark:text-blue-300 leading-relaxed">
                                 Based on sales velocity, you should order <strong>20 units</strong> of Milk and <strong>50kg</strong> of Sugar to cover the weekend rush.
                             </p>
                         </div>
@@ -166,14 +191,15 @@ const StorekeeperView = () => {
 
                 {/* Screen 3: Live Prices */}
                 {activeTab === 'prices' && (
-                    <div className="p-4 space-y-4">
-                        <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                            <TrendingUp className="text-green-600" /> Market Intelligence
-                        </h2>
+                    <div className="p-4 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                        <div className="flex items-center gap-2 mb-2">
+                            <TrendingUp className="text-green-500" size={20} />
+                            <h2 className="text-lg font-bold text-foreground">Market Intelligence</h2>
+                        </div>
 
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div className="bg-card rounded-2xl shadow-sm border border-border overflow-hidden">
                             <table className="w-full text-left text-sm">
-                                <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
+                                <thead className="bg-muted/50 text-muted-foreground font-medium border-b border-border">
                                     <tr>
                                         <th className="px-4 py-3">Item</th>
                                         <th className="px-4 py-3">Store</th>
@@ -181,22 +207,22 @@ const StorekeeperView = () => {
                                         <th className="px-4 py-3 text-right">Trend</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-100">
+                                <tbody className="divide-y divide-border">
                                     {MOCK_MARKET_PRICES.map(item => (
-                                        <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                                            <td className="px-4 py-3 font-medium text-slate-800">
+                                        <tr key={item.id} className="hover:bg-muted/50 transition-colors">
+                                            <td className="px-4 py-3 font-medium text-foreground">
                                                 {item.item}
-                                                <div className="text-[10px] text-slate-400 font-normal">{item.lastUpdated}</div>
+                                                <div className="text-[10px] text-muted-foreground font-normal">{item.lastUpdated}</div>
                                             </td>
-                                            <td className="px-4 py-3 text-slate-600">₹{item.storePrice}</td>
-                                            <td className="px-4 py-3 text-slate-600">₹{item.marketPrice}</td>
+                                            <td className="px-4 py-3 text-muted-foreground">₹{item.storePrice}</td>
+                                            <td className="px-4 py-3 text-muted-foreground">₹{item.marketPrice}</td>
                                             <td className="px-4 py-3 text-right">
                                                 {item.trend === 'up' ? (
-                                                    <div className="inline-flex items-center gap-1 text-red-500 bg-red-50 px-2 py-1 rounded-full text-xs font-bold">
+                                                    <div className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-full text-xs font-bold">
                                                         <ArrowUpRight size={14} /> +{(item.marketPrice - item.storePrice).toFixed(0)}
                                                     </div>
                                                 ) : (
-                                                    <div className="inline-flex items-center gap-1 text-green-600 bg-green-50 px-2 py-1 rounded-full text-xs font-bold">
+                                                    <div className="inline-flex items-center gap-1 text-red-600 dark:text-red-400 bg-red-500/10 px-2 py-1 rounded-full text-xs font-bold">
                                                         <ArrowDownRight size={14} /> -{(item.storePrice - item.marketPrice).toFixed(0)}
                                                     </div>
                                                 )}
@@ -209,47 +235,6 @@ const StorekeeperView = () => {
                     </div>
                 )}
             </div>
-
-            {/* Bottom Navigation Bar */}
-            <div className="bg-white border-t border-slate-200 px-6 py-3 flex justify-between items-center sticky bottom-0 z-20 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-                <button
-                    onClick={() => setActiveTab('catalog')}
-                    className={cn(
-                        "flex flex-col items-center gap-1 transition-colors",
-                        activeTab === 'catalog' ? "text-indigo-600" : "text-slate-400 hover:text-slate-600"
-                    )}
-                >
-                    <Home size={24} strokeWidth={activeTab === 'catalog' ? 2.5 : 2} />
-                    <span className="text-[10px] font-medium">Catalog</span>
-                </button>
-
-                <button
-                    onClick={() => setActiveTab('shortfall')}
-                    className={cn(
-                        "flex flex-col items-center gap-1 transition-colors relative",
-                        activeTab === 'shortfall' ? "text-indigo-600" : "text-slate-400 hover:text-slate-600"
-                    )}
-                >
-                    <div className="relative">
-                        <AlertTriangle size={24} strokeWidth={activeTab === 'shortfall' ? 2.5 : 2} />
-                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
-                    </div>
-                    <span className="text-[10px] font-medium">Alerts</span>
-                </button>
-
-                <button
-                    onClick={() => setActiveTab('prices')}
-                    className={cn(
-                        "flex flex-col items-center gap-1 transition-colors",
-                        activeTab === 'prices' ? "text-indigo-600" : "text-slate-400 hover:text-slate-600"
-                    )}
-                >
-                    <TrendingUp size={24} strokeWidth={activeTab === 'prices' ? 2.5 : 2} />
-                    <span className="text-[10px] font-medium">Trends</span>
-                </button>
-            </div>
-
-
         </div>
     );
 };

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Camera, Upload, CheckCircle, AlertCircle } from 'lucide-react';
+import { Camera, Upload, CheckCircle, AlertCircle, Loader2, ScanLine, FileText } from 'lucide-react';
 import { uploadVisionImage } from '../services/api';
+import { cn } from '../lib/utils';
 
 const StockManager = () => {
     const [ocrResult, setOcrResult] = useState(null);
@@ -39,17 +40,24 @@ const StockManager = () => {
     const shelfFileRef = React.useRef(null);
 
     return (
-        <div className="p-4 space-y-8 pb-20">
-            <h1 className="text-2xl font-bold mb-4">Stock Management</h1>
+        <div className="p-4 space-y-6 pb-safe-nav">
+            <div className="flex items-center justify-between">
+                <h1 className="text-3xl font-bold tracking-tight text-foreground">Stock Management</h1>
+            </div>
 
             {/* Bill OCR Section */}
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <h2 className="text-lg font-semibold flex items-center gap-2 mb-4">
-                    <Upload size={20} /> Scan Bill of Lading
-                </h2>
-                <p className="text-sm text-gray-500 mb-4">Upload a photo of the distributor's bill to automatically update inventory.</p>
+            <div className="bg-card p-6 rounded-2xl shadow-sm border border-border">
+                <div className="flex items-center gap-3 mb-4">
+                    <div className="p-3 bg-blue-500/10 text-blue-600 rounded-xl">
+                        <FileText size={24} />
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-semibold text-foreground">Scan Bill of Lading</h2>
+                        <p className="text-sm text-muted-foreground">Upload a photo of the distributor's bill to automatically update inventory.</p>
+                    </div>
+                </div>
 
-                <div className="flex gap-4">
+                <div className="grid grid-cols-2 gap-4">
                     <div className="flex-1">
                         <input
                             type="file"
@@ -59,13 +67,13 @@ const StockManager = () => {
                             capture="environment"
                             onChange={(e) => handleFileUpload(e, 'ocr')}
                         />
-                        <div
+                        <button
                             onClick={() => ocrCameraRef.current?.click()}
-                            className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-blue-300 rounded-lg hover:bg-blue-50 bg-blue-50/30 cursor-pointer w-full transition-colors"
+                            className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-primary/30 rounded-2xl hover:bg-primary/5 bg-primary/5 cursor-pointer w-full transition-all active:scale-95"
                         >
-                            <Camera className="w-8 h-8 text-blue-500 mb-2" />
-                            <p className="text-sm text-blue-600 font-medium">Take Photo</p>
-                        </div>
+                            <Camera className="w-8 h-8 text-primary mb-2" />
+                            <p className="text-sm text-primary font-medium">Take Photo</p>
+                        </button>
                     </div>
 
                     <div className="flex-1">
@@ -76,30 +84,30 @@ const StockManager = () => {
                             accept="image/*"
                             onChange={(e) => handleFileUpload(e, 'ocr')}
                         />
-                        <div
+                        <button
                             onClick={() => ocrFileRef.current?.click()}
-                            className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer w-full transition-colors"
+                            className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-border rounded-2xl hover:bg-muted cursor-pointer w-full transition-all active:scale-95"
                         >
-                            <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                            <p className="text-sm text-gray-500">Upload File</p>
-                        </div>
+                            <Upload className="w-8 h-8 text-muted-foreground mb-2" />
+                            <p className="text-sm text-muted-foreground">Upload File</p>
+                        </button>
                     </div>
                 </div>
 
                 {ocrResult && (
-                    <div className="mt-4 bg-green-50 p-4 rounded border border-green-200">
-                        <h3 className="font-bold text-green-800 mb-2 flex items-center gap-2">
-                            <CheckCircle size={16} /> Extracted Items
+                    <div className="mt-6 bg-green-500/10 p-5 rounded-2xl border border-green-500/20 animate-in fade-in slide-in-from-bottom-2">
+                        <h3 className="font-bold text-green-700 dark:text-green-400 mb-3 flex items-center gap-2">
+                            <CheckCircle size={18} /> Extracted Items
                         </h3>
-                        <ul className="space-y-2">
+                        <ul className="space-y-2 mb-4">
                             {ocrResult.map((item, idx) => (
-                                <li key={idx} className="flex justify-between text-sm">
-                                    <span>{item.name}</span>
-                                    <span className="font-mono">Qty: {item.quantity}</span>
+                                <li key={idx} className="flex justify-between text-sm p-2 bg-white/50 dark:bg-black/20 rounded-lg">
+                                    <span className="font-medium text-foreground">{item.name}</span>
+                                    <span className="font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">Qty: {item.quantity}</span>
                                 </li>
                             ))}
                         </ul>
-                        <button className="mt-4 w-full bg-green-600 text-white py-2 rounded hover:bg-green-700">
+                        <button className="w-full bg-green-600 text-white py-3 rounded-xl font-medium shadow-lg shadow-green-600/20 hover:bg-green-700 active:scale-95 transition-all">
                             Confirm & Update Inventory
                         </button>
                     </div>
@@ -107,13 +115,18 @@ const StockManager = () => {
             </div>
 
             {/* Shelf Analysis Section */}
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <h2 className="text-lg font-semibold flex items-center gap-2 mb-4">
-                    <Camera size={20} /> Shelf Analysis
-                </h2>
-                <p className="text-sm text-gray-500 mb-4">Take a picture of the shelf to update product locations.</p>
+            <div className="bg-card p-6 rounded-2xl shadow-sm border border-border">
+                <div className="flex items-center gap-3 mb-4">
+                    <div className="p-3 bg-purple-500/10 text-purple-600 rounded-xl">
+                        <ScanLine size={24} />
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-semibold text-foreground">Shelf Analysis</h2>
+                        <p className="text-sm text-muted-foreground">Take a picture of the shelf to update product locations.</p>
+                    </div>
+                </div>
 
-                <div className="flex gap-4">
+                <div className="grid grid-cols-2 gap-4">
                     <div className="flex-1">
                         <input
                             type="file"
@@ -123,13 +136,13 @@ const StockManager = () => {
                             capture="environment"
                             onChange={(e) => handleFileUpload(e, 'shelf')}
                         />
-                        <div
+                        <button
                             onClick={() => shelfCameraRef.current?.click()}
-                            className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-blue-300 rounded-lg hover:bg-blue-50 bg-blue-50/30 cursor-pointer w-full transition-colors"
+                            className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-purple-500/30 rounded-2xl hover:bg-purple-500/5 bg-purple-500/5 cursor-pointer w-full transition-all active:scale-95"
                         >
-                            <Camera className="w-8 h-8 text-blue-500 mb-2" />
-                            <p className="text-sm text-blue-600 font-medium">Take Photo</p>
-                        </div>
+                            <Camera className="w-8 h-8 text-purple-600 mb-2" />
+                            <p className="text-sm text-purple-600 font-medium">Take Photo</p>
+                        </button>
                     </div>
 
                     <div className="flex-1">
@@ -140,30 +153,30 @@ const StockManager = () => {
                             accept="image/*"
                             onChange={(e) => handleFileUpload(e, 'shelf')}
                         />
-                        <div
+                        <button
                             onClick={() => shelfFileRef.current?.click()}
-                            className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer w-full transition-colors"
+                            className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-border rounded-2xl hover:bg-muted cursor-pointer w-full transition-all active:scale-95"
                         >
-                            <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                            <p className="text-sm text-gray-500">Upload File</p>
-                        </div>
+                            <Upload className="w-8 h-8 text-muted-foreground mb-2" />
+                            <p className="text-sm text-muted-foreground">Upload File</p>
+                        </button>
                     </div>
                 </div>
 
                 {shelfResult && (
-                    <div className="mt-4 bg-blue-50 p-4 rounded border border-blue-200">
-                        <h3 className="font-bold text-blue-800 mb-2 flex items-center gap-2">
-                            <CheckCircle size={16} /> Identified Locations
+                    <div className="mt-6 bg-purple-500/10 p-5 rounded-2xl border border-purple-500/20 animate-in fade-in slide-in-from-bottom-2">
+                        <h3 className="font-bold text-purple-700 dark:text-purple-400 mb-3 flex items-center gap-2">
+                            <CheckCircle size={18} /> Identified Locations
                         </h3>
-                        <ul className="space-y-2">
+                        <ul className="space-y-2 mb-4">
                             {shelfResult.map((item, idx) => (
-                                <li key={idx} className="flex justify-between text-sm">
-                                    <span>{item.name}</span>
-                                    <span className="font-mono">{item.shelf}</span>
+                                <li key={idx} className="flex justify-between text-sm p-2 bg-white/50 dark:bg-black/20 rounded-lg">
+                                    <span className="font-medium text-foreground">{item.name}</span>
+                                    <span className="font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">{item.shelf}</span>
                                 </li>
                             ))}
                         </ul>
-                        <button className="mt-4 w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
+                        <button className="w-full bg-purple-600 text-white py-3 rounded-xl font-medium shadow-lg shadow-purple-600/20 hover:bg-purple-700 active:scale-95 transition-all">
                             Update Shelf Locations
                         </button>
                     </div>
@@ -171,18 +184,18 @@ const StockManager = () => {
             </div>
 
             {loading && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-white p-6 rounded-lg shadow-xl">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-                        <p>Processing Image...</p>
+                <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in">
+                    <div className="bg-card p-8 rounded-3xl shadow-2xl border border-border flex flex-col items-center gap-4">
+                        <Loader2 className="w-10 h-10 animate-spin text-primary" />
+                        <p className="text-lg font-medium text-foreground">Processing Image...</p>
                     </div>
                 </div>
             )}
 
             {error && (
-                <div className="bg-red-50 p-4 rounded border border-red-200 flex items-center gap-2 text-red-700">
+                <div className="bg-destructive/10 p-4 rounded-xl border border-destructive/20 flex items-center gap-3 text-destructive animate-in slide-in-from-top-2">
                     <AlertCircle size={20} />
-                    {error}
+                    <span className="font-medium">{error}</span>
                 </div>
             )}
         </div>
