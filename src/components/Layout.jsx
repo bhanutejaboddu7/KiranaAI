@@ -79,7 +79,7 @@ const Layout = ({ children }) => {
                 <div className="flex-1 overflow-y-auto overflow-x-hidden pb-24 md:pb-0 scroll-smooth">
                     <div className={cn(
                         "w-full h-full mx-auto animate-in fade-in duration-300 slide-in-from-bottom-4",
-                        location.pathname === '/' ? "" : "p-4 md:p-8 max-w-7xl"
+                        location.pathname === '/' ? "" : "md:p-8 max-w-7xl"
                     )}>
                         {children}
                     </div>

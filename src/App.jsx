@@ -9,6 +9,8 @@ import ErrorBoundary from './components/ErrorBoundary';
 
 import { App as CapacitorApp } from '@capacitor/app';
 import { useNavigate } from 'react-router-dom';
+import { Camera } from '@capacitor/camera';
+import { SpeechRecognition } from '@capacitor-community/speech-recognition';
 
 const DeepLinkHandler = () => {
   const navigate = useNavigate();
@@ -35,10 +37,30 @@ const DeepLinkHandler = () => {
   return null;
 };
 
+
+
 function App() {
   const [messages, setMessages] = React.useState([
     { role: 'assistant', content: 'Hello! I can help you analyze your shop data. Ask me questions like "How much rice do we have?" or "What are the total sales today?"' }
   ]);
+
+  React.useEffect(() => {
+    const requestPermissions = async () => {
+      try {
+        console.log("Requesting permissions...");
+        await Camera.requestPermissions();
+        // SpeechRecognition might fail on web, so wrap it
+        try {
+          await SpeechRecognition.requestPermissions();
+        } catch (err) {
+          console.warn("Speech recognition permissions failed (might be on web):", err);
+        }
+      } catch (e) {
+        console.error("Error requesting permissions:", e);
+      }
+    };
+    requestPermissions();
+  }, []);
 
   return (
     <Router>

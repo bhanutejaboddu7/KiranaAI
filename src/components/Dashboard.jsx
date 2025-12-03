@@ -83,7 +83,7 @@ const Dashboard = () => {
     ];
 
     return (
-        <div className="space-y-8 pb-safe">
+        <div className="p-4 space-y-8 pb-safe">
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="text-3xl font-bold tracking-tight text-foreground">Dashboard</h2>
