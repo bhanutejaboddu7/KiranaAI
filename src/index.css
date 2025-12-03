@@ -60,8 +60,20 @@
     @apply border-border;
   }
 
+  @layer utilities {
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  }
+
   html,
   body {
-    @apply h-full bg-background text-foreground;
+    height: 100%;
+    @apply bg-background text-foreground;
   }
 }
