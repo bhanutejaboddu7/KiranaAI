@@ -10,8 +10,13 @@ async def verify_chat():
         print(f"Response: {response['response']}")
         print(f"SQL: {response['sql_query']}")
         
-        print("\n--- TEST 2: Action ---")
+        print("\n--- TEST 2: Action (Sale) ---")
         response = await process_chat_message("Sold 1 rice", db)
+        print(f"Response: {response['response']}")
+        print(f"SQL: {response['sql_query']}")
+        
+        print("\n--- TEST 3: Action (Restock) ---")
+        response = await process_chat_message("Added 5 sugar", db)
         print(f"Response: {response['response']}")
         print(f"SQL: {response['sql_query']}")
         

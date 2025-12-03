@@ -25,10 +25,11 @@ Your goal is to help the shopkeeper manage their inventory and sales using natur
 
 **Rules for SQL Generation:**
 - **Read Data**: Use `SELECT`. Example: "How much rice?" -> `SELECT name, stock FROM products WHERE name LIKE '%rice%'`
-- **Record Sale**: Use `INSERT` into `sales` AND `UPDATE` `products`.
+- **Record Sale**: Use `INSERT` into `sales` AND `UPDATE` `products`. **ALWAYS** follow with a `SELECT` to check the new stock.
     - Example: "Sold 2 milk" ->
-      `INSERT INTO sales (product_id, quantity, total_amount, timestamp) SELECT id, 2, price * 2, datetime('now') FROM products WHERE name LIKE '%milk%'; UPDATE products SET stock = stock - 2 WHERE name LIKE '%milk%';`
-- **Restock**: Use `UPDATE`. Example: "Added 10 sugar" -> `UPDATE products SET stock = stock + 10 WHERE name LIKE '%sugar%'`
+      `INSERT INTO sales ...; UPDATE products SET stock = stock - 2 WHERE name LIKE '%milk%'; SELECT name, stock FROM products WHERE name LIKE '%milk%';`
+- **Restock**: Use `UPDATE`. **ALWAYS** follow with a `SELECT` to check the new stock.
+    - Example: "Added 10 sugar" -> `UPDATE products SET stock = stock + 10 WHERE name LIKE '%sugar%'; SELECT name, stock FROM products WHERE name LIKE '%sugar%';`
 
 **Response Format:**
 - If the user asks a general question (e.g., "Hello"), reply with `ANSWER: [Your friendly response]`.
@@ -58,73 +59,63 @@ async def process_chat_message(message: str, db: Session, history: list = []):
         if text_response.startswith("ANSWER:"):
             return {"response": text_response.replace("ANSWER:", "").strip(), "sql_query": None}
 
+        # Remove markdown code blocks if present
+        if "```" in text_response:
+            text_response = text_response.replace("```sql", "").replace("```", "").strip()
+
         # Remove "SQL:" prefix if present
         if text_response.upper().startswith("SQL:"):
             text_response = text_response[4:].strip()
 
-        # Handle SELECT queries
-        if text_response.upper().startswith("SELECT"):
+        # Check if it's a SQL query
+        if any(text_response.upper().startswith(kw) for kw in ["SELECT", "INSERT", "UPDATE", "DELETE"]):
             try:
                 queries = [q.strip() for q in text_response.split(';') if q.strip()]
                 data_str = ""
+                changes_made = False
                 
                 for query in queries:
                     result = db.execute(text(query))
-                    rows = result.fetchall()
                     
-                    if not rows:
-                        data_str += f"Query: {query}\nResult: No data found.\n\n"
-                        continue
-                        
-                    data_str += f"Query: {query}\nResult:\n"
-                    for row in rows:
-                        data_str += str(row) + "\n"
-                    data_str += "\n"
+                    if query.upper().startswith("SELECT"):
+                        rows = result.fetchall()
+                        if rows:
+                            data_str += f"Query: {query}\nResult:\n"
+                            for row in rows:
+                                data_str += str(row) + "\n"
+                        else:
+                            data_str += f"Query: {query}\nResult: No data found.\n\n"
+                    else:
+                        # INSERT/UPDATE/DELETE
+                        if result.rowcount > 0:
+                            changes_made = True
+                            
+                if changes_made:
+                    db.commit()
                 
-                if not data_str.strip():
-                     return {"response": "No data found for your request.", "sql_query": text_response}
-
-                # Ask Gemini to format the answer
+                # Generate final natural language response
                 answer_prompt = f"""
                 User Question: {message}
                 SQL Queries Executed: {text_response}
                 Data Retrieved:
                 {data_str}
+                Changes Made: {changes_made}
                 
-                Based on the data above, answer the user's question in a natural, helpful way. 
-                If it's a list of items, YOU MUST FORMAT IT AS A MARKDOWN TABLE.
-                If it's a single value (like price or stock), state it in a full sentence (e.g. "The price of Sugar is ₹45").
-                Use Markdown for all formatting (bold, italics, code blocks).
+                Instructions:
+                1. Answer the user's question naturally based on the Data Retrieved.
+                2. If 'Changes Made' is True, confirm the action was successful.
+                3. **CRITICAL**: If you have data about remaining stock, YOU MUST mention it. (e.g., "Sold 2 milk. Remaining stock: 8").
+                4. **CRITICAL**: Do NOT show any SQL code or technical terms.
+                5. **CRITICAL**: Do NOT use "ANSWER:" prefix.
+                6. Format lists as Markdown tables.
                 """
                 
                 final_response = chat_session.send_message(answer_prompt)
                 return {"response": final_response.text.strip(), "sql_query": text_response}
-            except Exception as e:
-                return {"response": f"Error executing query: {str(e)}", "sql_query": text_response}
 
-        # Handle INSERT/UPDATE queries
-        if text_response.upper().startswith("INSERT") or text_response.upper().startswith("UPDATE"):
-            try:
-                # Split multiple queries by semicolon
-                queries = [q.strip() for q in text_response.split(';') if q.strip()]
-                
-                total_rows_affected = 0
-                for query in queries:
-                    result = db.execute(text(query))
-                    total_rows_affected += result.rowcount
-                
-                if total_rows_affected == 0:
-                    db.rollback()
-                    return {
-                        "response": "Transaction failed. Insufficient stock or product not found.",
-                        "sql_query": text_response
-                    }
-                
-                db.commit()
-                return {"response": "Successfully recorded the transaction.", "sql_query": text_response}
             except Exception as e:
                 db.rollback()
-                return {"response": f"Error executing transaction: {str(e)}", "sql_query": text_response}
+                return {"response": f"I couldn't complete that request. Error: {str(e)}", "sql_query": text_response}
 
         return {"response": text_response, "sql_query": None}
 
