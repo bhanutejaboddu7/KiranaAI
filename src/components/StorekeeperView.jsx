@@ -86,7 +86,7 @@ const StorekeeperView = () => {
     return (
         <div className="flex flex-col h-full bg-background relative font-sans">
             {/* Top Navigation Tabs */}
-            <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border pt-safe">
+            <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border">
                 <div className="px-2 py-1">
                     <div className="flex items-center justify-between mb-2">
                         <h1 className="text-2xl font-bold tracking-tight text-foreground">Store Management</h1>
