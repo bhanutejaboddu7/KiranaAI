@@ -110,6 +110,45 @@ const ChatInterface = ({ messages, setMessages }) => {
             mediaRecorderRef.current = mediaRecorder;
             audioChunksRef.current = [];
 
+            // Audio Context for VAD (Voice Activity Detection)
+            const audioContext = new AudioContext();
+            const source = audioContext.createMediaStreamSource(stream);
+            const analyser = audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            source.connect(analyser);
+
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+
+            let silenceStart = Date.now();
+            let isSpeaking = false;
+            let silenceThreshold = 15; // Tuned threshold
+            let silenceDuration = 1500; // 1.5 seconds of silence to stop
+
+            const checkSilence = () => {
+                if (!isLiveModeRef.current || mediaRecorder.state !== 'recording') {
+                    if (audioContext.state !== 'closed') audioContext.close();
+                    return;
+                }
+
+                analyser.getByteFrequencyData(dataArray);
+                const average = dataArray.reduce((a, b) => a + b) / bufferLength;
+
+                if (average > silenceThreshold) {
+                    silenceStart = Date.now();
+                    isSpeaking = true;
+                } else if (isSpeaking) {
+                    if (Date.now() - silenceStart > silenceDuration) {
+                        stopRecording();
+                        isSpeaking = false;
+                        if (audioContext.state !== 'closed') audioContext.close();
+                        return;
+                    }
+                }
+
+                requestAnimationFrame(checkSilence);
+            };
+
             mediaRecorder.ondataavailable = (event) => {
                 if (event.data.size > 0) {
                     audioChunksRef.current.push(event.data);
@@ -146,10 +185,13 @@ const ChatInterface = ({ messages, setMessages }) => {
                 }
 
                 stream.getTracks().forEach(track => track.stop());
+                if (audioContext.state !== 'closed') audioContext.close();
             };
 
             mediaRecorder.start();
             setIsRecording(true);
+            checkSilence();
+
         } catch (err) {
             console.error("Error accessing microphone:", err);
             if (isLiveModeRef.current) {
