@@ -19,6 +19,14 @@ const ChatInterface = ({ messages, setMessages }) => {
     const messagesEndRef = useRef(null);
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
+    const isLiveModeRef = useRef(isLiveMode);
+
+    useEffect(() => {
+        isLiveModeRef.current = isLiveMode;
+        if (!isLiveMode && isRecording) {
+            stopRecording();
+        }
+    }, [isLiveMode]);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -89,6 +97,13 @@ const ChatInterface = ({ messages, setMessages }) => {
                     const data = await sendVoiceMessage(audioBlob);
 
                     const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
+
+                    audio.onended = () => {
+                        if (isLiveModeRef.current) {
+                            setTimeout(() => startRecording(), 500);
+                        }
+                    };
+
                     audio.play();
 
                     setMessages(prev => [...prev,
@@ -100,6 +115,10 @@ const ChatInterface = ({ messages, setMessages }) => {
                         role: 'assistant',
                         content: "Sorry, I couldn't process your voice message."
                     }]);
+                    // Retry listening even on error if still in live mode
+                    if (isLiveModeRef.current) {
+                        setTimeout(() => startRecording(), 1000);
+                    }
                 } finally {
                     setIsProcessing(false);
                 }

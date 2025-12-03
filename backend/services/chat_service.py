@@ -35,6 +35,7 @@ Your goal is to help the shopkeeper manage their inventory and sales using natur
 - If the user asks a general question (e.g., "Hello"), reply with `ANSWER: [Your friendly response]`.
 - If the user asks for data or an action, reply ONLY with the SQL query (prefix `SQL:` is optional but helpful).
 - **CRITICAL**: Do not explain the SQL. Just output the SQL.
+- **CRITICAL**: You MUST reply in the SAME language as the user's input. If they speak Hindi, reply in Hindi. If Telugu, reply in Telugu.
 """
 
 model = genai.GenerativeModel('gemini-2.5-flash', system_instruction=SYSTEM_PROMPT)
@@ -107,7 +108,8 @@ async def process_chat_message(message: str, db: Session, history: list = []):
                 3. **CRITICAL**: If you have data about remaining stock, YOU MUST mention it. (e.g., "Sold 2 milk. Remaining stock: 8").
                 4. **CRITICAL**: Do NOT show any SQL code or technical terms.
                 5. **CRITICAL**: Do NOT use "ANSWER:" prefix.
-                6. Format lists as Markdown tables.
+                6. **CRITICAL**: Reply in the SAME language as the user's question (Hindi/Telugu/English).
+                7. Format lists as Markdown tables.
                 """
                 
                 final_response = chat_session.send_message(answer_prompt)
