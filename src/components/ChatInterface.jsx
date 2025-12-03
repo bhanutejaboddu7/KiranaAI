@@ -100,12 +100,15 @@ const ChatInterface = ({ messages, setMessages }) => {
 
             websocketRef.current.onmessage = async (event) => {
                 const text = event.data;
+                console.log("Received message from backend:", text.substring(0, 100) + "...");
                 try {
                     const data = JSON.parse(text);
                     // Handle different message types from Gemini
                     if (data.serverContent && data.serverContent.modelTurn && data.serverContent.modelTurn.parts) {
+                        console.log("Processing", data.serverContent.modelTurn.parts.length, "parts");
                         for (const part of data.serverContent.modelTurn.parts) {
                             if (part.text) {
+                                console.log("Received text:", part.text);
                                 setMessages(prev => {
                                     const lastMsg = prev[prev.length - 1];
                                     // If the last message is from the assistant, append to it
@@ -122,6 +125,7 @@ const ChatInterface = ({ messages, setMessages }) => {
                                 });
                             }
                             if (part.inlineData && part.inlineData.mimeType.startsWith('audio/')) {
+                                console.log("Received audio chunk, size:", part.inlineData.data.length);
                                 // Play audio
                                 playAudioChunk(part.inlineData.data);
                             }
@@ -169,6 +173,7 @@ const ChatInterface = ({ messages, setMessages }) => {
             // Use ScriptProcessor for capturing raw PCM
             processorRef.current = audioContextRef.current.createScriptProcessor(4096, 1, 1);
 
+            let frameCount = 0;
             processorRef.current.onaudioprocess = (e) => {
                 if (!websocketRef.current || websocketRef.current.readyState !== WebSocket.OPEN) return;
 
@@ -198,6 +203,12 @@ const ChatInterface = ({ messages, setMessages }) => {
                     }
                 };
                 websocketRef.current.send(JSON.stringify(msg));
+
+                // Log every 100 frames to avoid console spam
+                frameCount++;
+                if (frameCount % 100 === 0) {
+                    console.log(`Sent ${frameCount} audio frames`);
+                }
             };
 
             sourceRef.current.connect(processorRef.current);
