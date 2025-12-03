@@ -13,18 +13,13 @@ import {
     ChevronRight,
     MoreVertical,
     Database,
-    Loader2
+    Loader2,
+    CheckCircle
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getInventory, seedDatabase } from '../services/api';
 
-// Mock Data for Shortfall (Keep until API supports it)
-const MOCK_SHORTFALL = [
-    { id: 9, name: 'Milk (500ml)', current: 2, reorder: 10, status: 'critical' },
-    { id: 10, name: 'Curd (200g)', current: 4, reorder: 15, status: 'critical' },
-    { id: 5, name: 'Sugar (1kg)', current: 5, reorder: 20, status: 'warning' },
-    { id: 3, name: 'Sunflower Oil (1L)', current: 8, reorder: 15, status: 'warning' },
-];
+
 
 // Mock Data for Market Prices (Keep until API supports it)
 const MOCK_MARKET_PRICES = [
@@ -201,23 +196,30 @@ const StorekeeperView = () => {
                         </div>
 
                         <div className="space-y-3">
-                            {MOCK_SHORTFALL.map(item => (
-                                <div key={item.id} className={cn(
-                                    "bg-card p-4 rounded-2xl border-l-4 shadow-sm flex justify-between items-center",
-                                    item.status === 'critical' ? "border-l-red-500" : "border-l-orange-500"
-                                )}>
-                                    <div>
-                                        <h3 className="font-semibold text-foreground">{item.name}</h3>
-                                        <div className="flex gap-3 mt-1 text-sm">
-                                            <p className="text-muted-foreground">Current: <span className="font-bold text-foreground">{item.current}</span></p>
-                                            <p className="text-muted-foreground">Reorder: {item.reorder}</p>
+                            {products.filter(p => p.stock < 10).length > 0 ? (
+                                products.filter(p => p.stock < 10).map(item => (
+                                    <div key={item.id} className={cn(
+                                        "bg-card p-4 rounded-2xl border-l-4 shadow-sm flex justify-between items-center",
+                                        item.stock < 5 ? "border-l-red-500" : "border-l-orange-500"
+                                    )}>
+                                        <div>
+                                            <h3 className="font-semibold text-foreground">{item.name}</h3>
+                                            <div className="flex gap-3 mt-1 text-sm">
+                                                <p className="text-muted-foreground">Current: <span className="font-bold text-foreground">{item.stock}</span></p>
+                                                <p className="text-muted-foreground">Reorder: 10</p>
+                                            </div>
                                         </div>
+                                        <button className="px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-xl shadow-sm shadow-primary/20 hover:bg-primary/90 active:scale-95 transition-all">
+                                            Restock
+                                        </button>
                                     </div>
-                                    <button className="px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-xl shadow-sm shadow-primary/20 hover:bg-primary/90 active:scale-95 transition-all">
-                                        Restock
-                                    </button>
+                                ))
+                            ) : (
+                                <div className="text-center py-8 text-muted-foreground bg-card rounded-2xl border border-border">
+                                    <CheckCircle className="w-12 h-12 mx-auto mb-2 text-green-500 opacity-50" />
+                                    <p>All stock levels are healthy!</p>
                                 </div>
-                            ))}
+                            )}
                         </div>
 
                         <div className="bg-blue-500/10 p-5 rounded-2xl border border-blue-500/20 mt-6">
