@@ -16,6 +16,7 @@ const ChatInterface = ({ messages, setMessages }) => {
     const [isRecording, setIsRecording] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [permissionGranted, setPermissionGranted] = useState(false);
+    const [volumeLevel, setVolumeLevel] = useState(0); // For visual feedback
 
     const messagesEndRef = useRef(null);
     const mediaRecorderRef = useRef(null);
@@ -112,6 +113,7 @@ const ChatInterface = ({ messages, setMessages }) => {
 
             // Audio Context for VAD (Voice Activity Detection)
             const audioContext = new AudioContext();
+            await audioContext.resume(); // Ensure context is running
             const source = audioContext.createMediaStreamSource(stream);
             const analyser = audioContext.createAnalyser();
             analyser.fftSize = 256;
@@ -122,7 +124,7 @@ const ChatInterface = ({ messages, setMessages }) => {
 
             let silenceStart = Date.now();
             let isSpeaking = false;
-            let silenceThreshold = 15; // Tuned threshold
+            let silenceThreshold = 10; // Lowered threshold for better sensitivity
             let silenceDuration = 1500; // 1.5 seconds of silence to stop
 
             const checkSilence = () => {
@@ -133,6 +135,9 @@ const ChatInterface = ({ messages, setMessages }) => {
 
                 analyser.getByteFrequencyData(dataArray);
                 const average = dataArray.reduce((a, b) => a + b) / bufferLength;
+
+                // Update volume level for visual feedback
+                setVolumeLevel(average);
 
                 if (average > silenceThreshold) {
                     silenceStart = Date.now();
@@ -158,6 +163,7 @@ const ChatInterface = ({ messages, setMessages }) => {
             mediaRecorder.onstop = async () => {
                 const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
                 setIsProcessing(true);
+                setVolumeLevel(0); // Reset volume visual
                 try {
                     const data = await sendVoiceMessage(audioBlob);
 
@@ -263,16 +269,21 @@ const ChatInterface = ({ messages, setMessages }) => {
                         {/* Abstract Waveform / Orb */}
                         <div className="relative w-64 h-64 flex items-center justify-center">
                             {/* Core Orb */}
-                            <div className={cn(
-                                "absolute w-32 h-32 rounded-full blur-3xl transition-all duration-1000",
-                                isRecording ? "bg-indigo-500/60 scale-125" : "bg-blue-500/40 scale-100",
-                                isProcessing && "bg-purple-500/60 animate-pulse"
-                            )} />
+                            <div
+                                className={cn(
+                                    "absolute w-32 h-32 rounded-full blur-3xl transition-all duration-100", // Faster transition for volume
+                                    isRecording ? "bg-indigo-500/60" : "bg-blue-500/40",
+                                    isProcessing && "bg-purple-500/60 animate-pulse"
+                                )}
+                                style={{
+                                    transform: isRecording ? `scale(${1 + Math.min(volumeLevel / 50, 1)})` : 'scale(1)'
+                                }}
+                            />
 
                             {/* Outer Rings */}
                             <div className={cn(
                                 "absolute inset-0 border-2 rounded-full opacity-20 transition-all duration-1000",
-                                isRecording ? "border-indigo-400 scale-110 animate-ping-slow" : "border-slate-500 scale-90"
+                                isRecording ? "border-indigo-400 animate-ping-slow" : "border-slate-500 scale-90"
                             )} />
                             <div className={cn(
                                 "absolute inset-0 border border-white/10 rounded-full scale-150 opacity-10",
@@ -296,7 +307,7 @@ const ChatInterface = ({ messages, setMessages }) => {
                                                     isRecording ? "animate-wave" : "h-1.5 opacity-50"
                                                 )}
                                                 style={{
-                                                    height: isRecording ? '100%' : '6px',
+                                                    height: isRecording ? `${10 + Math.random() * 20 + volumeLevel}px` : '6px', // Dynamic height
                                                     animationDelay: `${i * 0.1}s`
                                                 }}
                                             />
