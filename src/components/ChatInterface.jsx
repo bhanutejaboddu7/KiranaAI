@@ -6,6 +6,8 @@ import 'highlight.js/styles/github-dark.css';
 import { Send, Bot, User, Loader2, Mic, X, Radio, Sparkles } from 'lucide-react';
 import { chatWithData, sendVoiceMessage } from '../services/api';
 import { cn } from '../lib/utils';
+import { SpeechRecognition } from '@capacitor-community/speech-recognition';
+import { Capacitor } from '@capacitor/core';
 
 const ChatInterface = ({ messages, setMessages }) => {
     const [input, setInput] = useState('');
@@ -60,6 +62,15 @@ const ChatInterface = ({ messages, setMessages }) => {
 
     const startRecording = async () => {
         try {
+            // Explicitly request permission on mobile
+            if (Capacitor.isNativePlatform()) {
+                const { permission } = await SpeechRecognition.requestPermission();
+                if (!permission) {
+                    alert("Microphone permission is required for voice chat.");
+                    return;
+                }
+            }
+
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             const mediaRecorder = new MediaRecorder(stream);
             mediaRecorderRef.current = mediaRecorder;
