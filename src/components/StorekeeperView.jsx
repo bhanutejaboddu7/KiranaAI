@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Home,
     AlertTriangle,
@@ -11,27 +11,14 @@ import {
     Package,
     ShoppingCart,
     ChevronRight,
-    MoreVertical
+    MoreVertical,
+    Database,
+    Loader2
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { getInventory, seedDatabase } from '../services/api';
 
-// Mock Data for Catalog
-const MOCK_PRODUCTS = [
-    { id: 1, name: 'Basmati Rice (Premium)', category: 'Grains', stock: 45, price: 120, image: '🌾' },
-    { id: 2, name: 'Toor Dal', category: 'Pulses', stock: 12, price: 140, image: '🥣' },
-    { id: 3, name: 'Sunflower Oil (1L)', category: 'Oil', stock: 8, price: 165, image: '🌻' },
-    { id: 4, name: 'Whole Wheat Atta (5kg)', category: 'Flour', stock: 20, price: 210, image: '🍞' },
-    { id: 5, name: 'Sugar (1kg)', category: 'Essentials', stock: 5, price: 45, image: '🍬' },
-    { id: 6, name: 'Tata Salt', category: 'Essentials', stock: 50, price: 25, image: '🧂' },
-    { id: 7, name: 'Red Chilli Powder', category: 'Spices', stock: 15, price: 80, image: '🌶️' },
-    { id: 8, name: 'Turmeric Powder', category: 'Spices', stock: 18, price: 60, image: '🟡' },
-    { id: 9, name: 'Milk (500ml)', category: 'Dairy', stock: 2, price: 30, image: '🥛' },
-    { id: 10, name: 'Curd (200g)', category: 'Dairy', stock: 4, price: 20, image: '🥣' },
-    { id: 11, name: 'Paneer (200g)', category: 'Dairy', stock: 10, price: 90, image: '🧀' },
-    { id: 12, name: 'Maggi Noodles', category: 'Snacks', stock: 100, price: 14, image: '🍜' },
-];
-
-// Mock Data for Shortfall
+// Mock Data for Shortfall (Keep until API supports it)
 const MOCK_SHORTFALL = [
     { id: 9, name: 'Milk (500ml)', current: 2, reorder: 10, status: 'critical' },
     { id: 10, name: 'Curd (200g)', current: 4, reorder: 15, status: 'critical' },
@@ -39,7 +26,7 @@ const MOCK_SHORTFALL = [
     { id: 3, name: 'Sunflower Oil (1L)', current: 8, reorder: 15, status: 'warning' },
 ];
 
-// Mock Data for Market Prices
+// Mock Data for Market Prices (Keep until API supports it)
 const MOCK_MARKET_PRICES = [
     { id: 1, item: 'Onion (Nashik)', storePrice: 40, marketPrice: 35, trend: 'down', lastUpdated: '10:30 AM' },
     { id: 2, item: 'Potato (Agra)', storePrice: 20, marketPrice: 22, trend: 'up', lastUpdated: '11:00 AM' },
@@ -55,10 +42,44 @@ const StorekeeperView = () => {
     const [activeTab, setActiveTab] = useState('catalog');
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('All');
+    const [products, setProducts] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [seeding, setSeeding] = useState(false);
 
-    const filteredProducts = MOCK_PRODUCTS.filter(p => {
-        const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesCategory = selectedCategory === 'All' || p.category === selectedCategory;
+    const fetchProducts = async () => {
+        setLoading(true);
+        try {
+            const data = await getInventory();
+            setProducts(data);
+        } catch (error) {
+            console.error("Failed to fetch inventory", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchProducts();
+    }, []);
+
+    const handleSeedData = async () => {
+        setSeeding(true);
+        try {
+            await seedDatabase();
+            await fetchProducts(); // Refresh data after seeding
+            alert("Dummy data added successfully!");
+        } catch (error) {
+            console.error("Failed to seed data", error);
+            alert("Failed to add dummy data.");
+        } finally {
+            setSeeding(false);
+        }
+    };
+
+    const filteredProducts = products.filter(p => {
+        const matchesSearch = (p.name || '').toLowerCase().includes(searchQuery.toLowerCase());
+        // Assuming API returns category, if not, we might need to adjust or mock it for now
+        const matchesCategory = selectedCategory === 'All' || (p.category || 'Uncategorized') === selectedCategory;
         return matchesSearch && matchesCategory;
     });
 
@@ -67,7 +88,17 @@ const StorekeeperView = () => {
             {/* Top Navigation Tabs */}
             <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border pt-safe">
                 <div className="px-4 py-3">
-                    <h1 className="text-2xl font-bold tracking-tight text-foreground mb-4">Store Management</h1>
+                    <div className="flex items-center justify-between mb-4">
+                        <h1 className="text-2xl font-bold tracking-tight text-foreground">Store Management</h1>
+                        <button
+                            onClick={handleSeedData}
+                            disabled={seeding}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-secondary/50 hover:bg-secondary text-secondary-foreground rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                        >
+                            {seeding ? <Loader2 size={14} className="animate-spin" /> : <Database size={14} />}
+                            Add Dummy Data
+                        </button>
+                    </div>
                     <div className="flex p-1 bg-muted/50 rounded-xl">
                         {['catalog', 'shortfall', 'prices'].map((tab) => (
                             <button
@@ -127,26 +158,37 @@ const StorekeeperView = () => {
                         </div>
 
                         {/* Product Grid */}
-                        <div className="grid grid-cols-1 gap-3">
-                            {filteredProducts.map(product => (
-                                <div key={product.id} className="bg-card p-4 rounded-2xl shadow-sm border border-border flex items-center gap-4 active:scale-[0.99] transition-transform">
-                                    <div className="w-16 h-16 bg-muted/50 rounded-xl flex items-center justify-center text-3xl shrink-0">
-                                        {product.image}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <h3 className="font-semibold text-foreground truncate">{product.name}</h3>
-                                        <p className="text-xs text-muted-foreground">{product.category}</p>
-                                        <div className="flex items-center gap-3 mt-1.5">
-                                            <span className="text-sm font-bold text-primary">₹{product.price}</span>
-                                            <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-md">Stock: {product.stock}</span>
+                        {loading ? (
+                            <div className="flex justify-center py-12">
+                                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 gap-3">
+                                {filteredProducts.length > 0 ? filteredProducts.map(product => (
+                                    <div key={product.id} className="bg-card p-4 rounded-2xl shadow-sm border border-border flex items-center gap-4 active:scale-[0.99] transition-transform">
+                                        <div className="w-16 h-16 bg-muted/50 rounded-xl flex items-center justify-center text-3xl shrink-0">
+                                            {/* Use a default icon if image is missing or URL */}
+                                            {product.image_url ? <img src={product.image_url} alt={product.name} className="w-full h-full object-cover rounded-xl" /> : '📦'}
                                         </div>
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className="font-semibold text-foreground truncate">{product.name}</h3>
+                                            <p className="text-xs text-muted-foreground">{product.category || 'General'}</p>
+                                            <div className="flex items-center gap-3 mt-1.5">
+                                                <span className="text-sm font-bold text-primary">₹{product.price}</span>
+                                                <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-md">Stock: {product.stock}</span>
+                                            </div>
+                                        </div>
+                                        <button className="p-2.5 bg-primary/10 text-primary rounded-xl hover:bg-primary/20 transition-colors">
+                                            <Plus size={20} />
+                                        </button>
                                     </div>
-                                    <button className="p-2.5 bg-primary/10 text-primary rounded-xl hover:bg-primary/20 transition-colors">
-                                        <Plus size={20} />
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
+                                )) : (
+                                    <div className="text-center py-12 text-muted-foreground">
+                                        No products found. Try adding dummy data.
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 )}
 

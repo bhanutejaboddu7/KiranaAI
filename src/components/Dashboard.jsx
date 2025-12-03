@@ -1,27 +1,43 @@
 import React, { useEffect, useState } from 'react';
-import { Package, TrendingUp, AlertTriangle, ArrowUpRight, ArrowDownRight, Clock } from 'lucide-react';
-import { getInventory, getSales } from '../services/api';
+import { Package, TrendingUp, AlertTriangle, ArrowUpRight, ArrowDownRight, Clock, Database, Loader2 } from 'lucide-react';
+import { getInventory, getSales, seedDatabase } from '../services/api';
 import { cn } from '../lib/utils';
 
 const Dashboard = () => {
     const [inventory, setInventory] = useState([]);
     const [sales, setSales] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [seeding, setSeeding] = useState(false);
+
+    const fetchData = async () => {
+        try {
+            const [invData, salesData] = await Promise.all([getInventory(), getSales()]);
+            setInventory(invData);
+            setSales(salesData);
+        } catch (error) {
+            console.error("Failed to fetch data", error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const [invData, salesData] = await Promise.all([getInventory(), getSales()]);
-                setInventory(invData);
-                setSales(salesData);
-            } catch (error) {
-                console.error("Failed to fetch data", error);
-            } finally {
-                setLoading(false);
-            }
-        };
         fetchData();
     }, []);
+
+    const handleSeedData = async () => {
+        setSeeding(true);
+        try {
+            await seedDatabase();
+            await fetchData(); // Refresh data after seeding
+            alert("Dummy data added successfully!");
+        } catch (error) {
+            console.error("Failed to seed data", error);
+            alert("Failed to add dummy data.");
+        } finally {
+            setSeeding(false);
+        }
+    };
 
     if (loading) {
         return (
@@ -69,10 +85,20 @@ const Dashboard = () => {
     return (
         <div className="space-y-8 pb-safe">
             <div className="flex items-center justify-between">
-                <h2 className="text-3xl font-bold tracking-tight text-foreground">Dashboard</h2>
-                <div className="text-sm text-muted-foreground bg-muted px-3 py-1 rounded-full">
-                    {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+                <div>
+                    <h2 className="text-3xl font-bold tracking-tight text-foreground">Dashboard</h2>
+                    <div className="text-sm text-muted-foreground bg-muted px-3 py-1 rounded-full w-fit mt-2">
+                        {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+                    </div>
                 </div>
+                <button
+                    onClick={handleSeedData}
+                    disabled={seeding}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-secondary/50 hover:bg-secondary text-secondary-foreground rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                >
+                    {seeding ? <Loader2 size={14} className="animate-spin" /> : <Database size={14} />}
+                    Add Dummy Data
+                </button>
             </div>
 
             {/* Stats Cards */}

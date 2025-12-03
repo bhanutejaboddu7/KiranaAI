@@ -55,4 +55,9 @@ export const importInventory = async (products) => {
     return response.data;
 };
 
+export const seedDatabase = async () => {
+    const response = await api.post('/seed');
+    return response.data;
+};
+
 
