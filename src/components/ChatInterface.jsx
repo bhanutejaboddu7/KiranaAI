@@ -3,26 +3,15 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import 'highlight.js/styles/github-dark.css';
-import { Send, Bot, User, Loader2, Mic, MicOff, Radio } from 'lucide-react';
+import { Send, Bot, User, Loader2 } from 'lucide-react';
 import { chatWithData } from '../services/api';
 import { cn } from '../lib/utils';
 
 const ChatInterface = ({ messages, setMessages }) => {
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [isRecording, setIsRecording] = useState(false);
-    const [isLiveMode, setIsLiveMode] = useState(false);
-    const [isConnected, setIsConnected] = useState(false);
 
     const messagesEndRef = useRef(null);
-    const websocketRef = useRef(null);
-    const audioCaptureContextRef = useRef(null); // For mic capture (16kHz)
-    const audioPlaybackContextRef = useRef(null); // For playback (24kHz)
-    const processorRef = useRef(null);
-    const sourceRef = useRef(null);
-    const audioQueueRef = useRef([]);
-    const isPlayingRef = useRef(false);
-    const nextStartTimeRef = useRef(0);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -31,13 +20,6 @@ const ChatInterface = ({ messages, setMessages }) => {
     useEffect(() => {
         scrollToBottom();
     }, [messages, isLoading]);
-
-    // Cleanup on unmount
-    useEffect(() => {
-        return () => {
-            stopLiveSession();
-        };
-    }, []);
 
     const handleSend = async (e) => {
         if (e) e.preventDefault();
@@ -70,273 +52,6 @@ const ChatInterface = ({ messages, setMessages }) => {
             }]);
         } finally {
             setIsLoading(false);
-        }
-    };
-
-    const toggleLiveMode = () => {
-        if (isLiveMode) {
-            stopLiveSession();
-        } else {
-            startLiveSession();
-        }
-    };
-
-    const startLiveSession = async () => {
-        try {
-            setIsLiveMode(true);
-            setIsLoading(true);
-
-            // Initialize WebSocket
-            const wsUrl = 'wss://kiranaai.onrender.com/ws/chat';
-
-            console.log("Connecting to WebSocket:", wsUrl);
-            websocketRef.current = new WebSocket(wsUrl);
-
-            websocketRef.current.onopen = () => {
-                console.log("Connected to Live API");
-                setIsConnected(true);
-                setIsLoading(false);
-                startAudioCapture();
-            };
-
-            websocketRef.current.onmessage = async (event) => {
-                const text = event.data;
-                console.log("Received message from backend:", text.substring(0, 100) + "...");
-                try {
-                    const data = JSON.parse(text);
-                    // Handle different message types from Gemini
-                    if (data.serverContent && data.serverContent.modelTurn && data.serverContent.modelTurn.parts) {
-                        console.log("Processing", data.serverContent.modelTurn.parts.length, "parts");
-                        for (const part of data.serverContent.modelTurn.parts) {
-                            if (part.text) {
-                                console.log("Received text:", part.text);
-
-                                // Filter out internal thoughts/status messages
-                                const lowerText = part.text.toLowerCase();
-                                const isInternalThought =
-                                    lowerText.includes('reviewing') ||
-                                    lowerText.includes('analyzing') ||
-                                    lowerText.includes('user\'s query') ||
-                                    part.text.startsWith('**');
-
-                                if (!isInternalThought) {
-                                    setMessages(prev => {
-                                        const lastMsg = prev[prev.length - 1];
-                                        // If the last message is from the assistant, append to it
-                                        if (lastMsg && lastMsg.role === 'assistant') {
-                                            const updatedMessages = [...prev];
-                                            updatedMessages[prev.length - 1] = {
-                                                ...lastMsg,
-                                                content: lastMsg.content + part.text
-                                            };
-                                            return updatedMessages;
-                                        }
-                                        // Otherwise, start a new assistant message
-                                        return [...prev, { role: 'assistant', content: part.text }];
-                                    });
-                                } else {
-                                    console.log("Filtered out internal thought:", part.text.substring(0, 50));
-                                }
-                            }
-                            if (part.inlineData && part.inlineData.mimeType.startsWith('audio/')) {
-                                console.log("Received audio chunk, size:", part.inlineData.data.length);
-                                // Play audio
-                                playAudioChunk(part.inlineData.data);
-                            }
-                        }
-                    }
-                } catch (e) {
-                    console.log("Received non-JSON message:", text);
-                }
-            };
-
-            websocketRef.current.onclose = () => {
-                console.log("Disconnected from Live API");
-                setIsConnected(false);
-                setIsLiveMode(false);
-                stopAudioCapture();
-            };
-
-            websocketRef.current.onerror = (error) => {
-                console.error("WebSocket error:", error);
-                setIsLoading(false);
-            };
-
-        } catch (error) {
-            console.error("Failed to start live session:", error);
-            setIsLiveMode(false);
-            setIsLoading(false);
-        }
-    };
-
-    const stopLiveSession = () => {
-        if (websocketRef.current) {
-            websocketRef.current.close();
-        }
-        stopAudioCapture();
-        setIsLiveMode(false);
-        setIsConnected(false);
-    };
-
-    const startAudioCapture = async () => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1 } });
-            audioCaptureContextRef.current = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-            sourceRef.current = audioCaptureContextRef.current.createMediaStreamSource(stream);
-
-            // Use ScriptProcessor for capturing raw PCM
-            processorRef.current = audioCaptureContextRef.current.createScriptProcessor(4096, 1, 1);
-
-            let frameCount = 0;
-            processorRef.current.onaudioprocess = (e) => {
-                if (!websocketRef.current || websocketRef.current.readyState !== WebSocket.OPEN) return;
-
-                const inputData = e.inputBuffer.getChannelData(0);
-                // Convert float32 to int16
-                const pcmData = new Int16Array(inputData.length);
-                for (let i = 0; i < inputData.length; i++) {
-                    pcmData[i] = Math.max(-1, Math.min(1, inputData[i])) * 0x7FFF;
-                }
-
-                // Convert to base64
-                const buffer = new ArrayBuffer(pcmData.length * 2);
-                const view = new DataView(buffer);
-                for (let i = 0; i < pcmData.length; i++) {
-                    view.setInt16(i * 2, pcmData[i], true); // Little endian
-                }
-
-                const base64Audio = btoa(String.fromCharCode(...new Uint8Array(buffer)));
-
-                // Send to Gemini
-                const msg = {
-                    realtime_input: {
-                        media_chunks: [{
-                            mime_type: "audio/pcm",
-                            data: base64Audio
-                        }]
-                    }
-                };
-                websocketRef.current.send(JSON.stringify(msg));
-
-                // Log every 100 frames to avoid console spam
-                frameCount++;
-                if (frameCount % 100 === 0) {
-                    console.log(`Sent ${frameCount} audio frames`);
-                }
-            };
-
-            sourceRef.current.connect(processorRef.current);
-            // processorRef.current.connect(audioContextRef.current.destination); // REMOVED LOOPBACK
-
-        } catch (error) {
-            console.error("Error capturing audio:", error);
-        }
-    };
-
-    const stopAudioCapture = () => {
-        if (processorRef.current) {
-            processorRef.current.disconnect();
-            processorRef.current = null;
-        }
-        if (sourceRef.current) {
-            sourceRef.current.disconnect();
-            sourceRef.current = null;
-        }
-        if (audioCaptureContextRef.current) {
-            audioCaptureContextRef.current.close();
-            audioCaptureContextRef.current = null;
-        }
-    };
-
-    const processAudioQueue = async () => {
-        if (isPlayingRef.current) return;
-
-        const audioCtx = audioPlaybackContextRef.current;
-        if (!audioCtx) return;
-
-        // Ensure context is running
-        if (audioCtx.state === 'suspended') {
-            await audioCtx.resume();
-        }
-
-        isPlayingRef.current = true;
-
-        while (audioQueueRef.current.length > 0) {
-            const { audioBuffer, audioCtx: ctx } = audioQueueRef.current.shift();
-
-            // Create source
-            const source = ctx.createBufferSource();
-            source.buffer = audioBuffer;
-            source.connect(ctx.destination);
-
-            // Schedule playback
-            const now = ctx.currentTime;
-
-            // Initialize if first chunk
-            if (nextStartTimeRef.current === 0 || nextStartTimeRef.current < now) {
-                nextStartTimeRef.current = now + 0.1; // Small buffer
-            }
-
-            const startTime = nextStartTimeRef.current;
-            source.start(startTime);
-
-            // Update next start time
-            nextStartTimeRef.current = startTime + audioBuffer.duration;
-
-            console.log(`Scheduled audio chunk, duration: ${audioBuffer.duration}s, starts at: ${startTime.toFixed(2)}s`);
-        }
-
-        isPlayingRef.current = false;
-    };
-
-    const playAudioChunk = async (base64Data) => {
-        try {
-            console.log("playAudioChunk called, data length:", base64Data.length);
-            // Initialize AudioContext if not present or closed
-            if (!audioPlaybackContextRef.current || audioPlaybackContextRef.current.state === 'closed') {
-                audioPlaybackContextRef.current = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
-                nextStartTimeRef.current = audioPlaybackContextRef.current.currentTime;
-                console.log("Created new playback AudioContext");
-            }
-
-            const audioCtx = audioPlaybackContextRef.current;
-            // Decode base64
-            const binaryString = atob(base64Data);
-            const len = binaryString.length;
-            const bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
-            }
-
-            // Convert PCM to AudioBuffer
-            // Gemini sends PCM 24kHz (usually)
-            const int16Array = new Int16Array(bytes.buffer);
-            const float32Array = new Float32Array(int16Array.length);
-
-            for (let i = 0; i < int16Array.length; i++) {
-                float32Array[i] = int16Array[i] / 32768.0;
-            }
-
-            const audioBuffer = audioCtx.createBuffer(1, float32Array.length, 24000);
-            audioBuffer.getChannelData(0).set(float32Array);
-
-            console.log("Audio buffer created, duration:", audioBuffer.duration, "seconds");
-
-            // Add to queue
-            audioQueueRef.current.push({ audioBuffer, audioCtx });
-            console.log("Added to queue, total in queue:", audioQueueRef.current.length);
-
-            // Trigger processing if not already playing and we have enough buffer
-            // Or if we are already "streaming" (nextStartTime is in future), we can just push and let the loop handle it?
-            // The loop above is synchronous-ish (while loop), so it drains the queue immediately.
-            // We need a better approach for "streaming".
-            // Actually, the Web Audio API handles scheduling. We can just schedule everything in the queue immediately.
-            // The "breaking" happens when nextStartTime < currentTime.
-
-            processAudioQueue();
-
-        } catch (e) {
-            console.error("Error playing audio:", e);
         }
     };
 
@@ -408,31 +123,17 @@ const ChatInterface = ({ messages, setMessages }) => {
             {/* Input Area */}
             < div className="p-4 border-t border-slate-700 bg-slate-800" >
                 <form onSubmit={handleSend} className="flex gap-2 items-center">
-                    <button
-                        type="button"
-                        onClick={toggleLiveMode}
-                        className={cn(
-                            "p-2 rounded-full transition-all duration-300",
-                            isLiveMode
-                                ? "bg-red-500/20 text-red-400 hover:bg-red-500/30 animate-pulse"
-                                : "bg-slate-700 text-slate-300 hover:bg-slate-600"
-                        )}
-                        title={isLiveMode ? "Stop Live Mode" : "Start Live Mode"}
-                    >
-                        {isLiveMode ? <Radio size={20} /> : <Mic size={20} />}
-                    </button>
-
                     <input
                         type="text"
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
-                        placeholder={isLiveMode ? "Listening..." : "Ask about your inventory or sales..."}
+                        placeholder="Ask about your inventory or sales..."
                         className="flex-1 px-4 py-2 rounded-lg border border-slate-600 bg-slate-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        disabled={isLoading || isLiveMode}
+                        disabled={isLoading}
                     />
                     <button
                         type="submit"
-                        disabled={isLoading || !input.trim() || isLiveMode}
+                        disabled={isLoading || !input.trim()}
                         className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg"
                     >
                         <Send size={20} />
