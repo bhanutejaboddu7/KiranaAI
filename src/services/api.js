@@ -11,6 +11,15 @@ export const chatWithData = async (message, history = []) => {
     return response.data;
 };
 
+export const sendVoiceMessage = async (audioBlob) => {
+    const formData = new FormData();
+    formData.append('file', audioBlob, 'voice.webm');
+    const response = await api.post('/live/chat', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+};
+
 export const getInventory = async () => {
     const response = await api.get('/inventory/');
     return response.data;
