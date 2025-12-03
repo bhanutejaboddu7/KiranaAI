@@ -88,7 +88,10 @@ const Layout = ({ children }) => {
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-secondary" />
                 </div>
 
-                <div className="p-4 md:p-8 max-w-7xl mx-auto w-full animate-in fade-in duration-500">
+                <div className={cn(
+                    "md:p-8 max-w-7xl mx-auto w-full animate-in fade-in duration-500",
+                    location.pathname === '/' ? "p-0" : "p-4"
+                )}>
                     {children}
                 </div>
             </div>
