@@ -248,8 +248,6 @@ const ChatInterface = ({ messages, setMessages }) => {
         }
     };
 
-    const MIN_BUFFER_DURATION = 0.5; // Seconds of audio to buffer before starting playback
-
     const processAudioQueue = async () => {
         if (isPlayingRef.current) return;
 
@@ -259,18 +257,6 @@ const ChatInterface = ({ messages, setMessages }) => {
         // Ensure context is running
         if (audioCtx.state === 'suspended') {
             await audioCtx.resume();
-        }
-
-        // Check if we are currently playing audio (tail is in the future)
-        const currentTime = audioCtx.currentTime;
-        const isAudioPlaying = nextStartTimeRef.current > currentTime;
-
-        // Calculate total duration in queue
-        const totalDurationInQueue = audioQueueRef.current.reduce((acc, item) => acc + item.audioBuffer.duration, 0);
-
-        // If not playing (gap/start), wait for buffer to fill
-        if (!isAudioPlaying && totalDurationInQueue < MIN_BUFFER_DURATION) {
-            return;
         }
 
         isPlayingRef.current = true;
@@ -286,16 +272,9 @@ const ChatInterface = ({ messages, setMessages }) => {
             // Schedule playback
             const now = ctx.currentTime;
 
-            // CHANGE: Allow a small "drift" before resetting.
-            // Only reset if we are significantly behind (more than 20ms)
-            if (nextStartTimeRef.current < now) {
-                // We are late. If the gap is small (<0.2s), play immediately (catch up)
-                // If the gap is huge (lag spike), reset to future to avoid playing at 10x speed
-                if (now - nextStartTimeRef.current > 0.2) {
-                    nextStartTimeRef.current = now + 0.05; // Hard reset (you will hear a gap)
-                } else {
-                    nextStartTimeRef.current = now; // Soft reset (play immediately)
-                }
+            // Initialize if first chunk
+            if (nextStartTimeRef.current === 0 || nextStartTimeRef.current < now) {
+                nextStartTimeRef.current = now + 0.1; // Small buffer
             }
 
             const startTime = nextStartTimeRef.current;
@@ -303,6 +282,8 @@ const ChatInterface = ({ messages, setMessages }) => {
 
             // Update next start time
             nextStartTimeRef.current = startTime + audioBuffer.duration;
+
+            console.log(`Scheduled audio chunk, duration: ${audioBuffer.duration}s, starts at: ${startTime.toFixed(2)}s`);
         }
 
         isPlayingRef.current = false;
