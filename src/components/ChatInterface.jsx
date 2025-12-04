@@ -188,9 +188,12 @@ const ChatInterface = ({ messages, setMessages }) => {
                 try {
                     const data = await sendVoiceMessage(audioBlob);
 
-                    const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
+                    // Create URL for the audio blob
+                    const audioUrl = URL.createObjectURL(data.audioBlob);
+                    const audio = new Audio(audioUrl);
 
                     audio.onended = () => {
+                        URL.revokeObjectURL(audioUrl); // Clean up
                         if (isLiveModeRef.current) {
                             setTimeout(() => startRecording(), 500);
                         }

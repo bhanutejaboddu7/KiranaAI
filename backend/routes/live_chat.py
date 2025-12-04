@@ -5,8 +5,8 @@ import google.generativeai as genai
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Form
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from sqlalchemy import text
 import edge_tts
+from gtts import gTTS
 from .. import database, models
 from ..services.chat_service import process_chat_message
 from dotenv import load_dotenv
@@ -35,6 +35,11 @@ def detect_language(text):
             return 'te'
     return 'en'
 
+from fastapi.responses import StreamingResponse
+from urllib.parse import quote
+
+# ... (imports)
+
 @router.post("/chat")
 async def live_chat(file: UploadFile = File(...), language: str = Form("en"), db: Session = Depends(get_db)):
     try:
@@ -51,11 +56,10 @@ async def live_chat(file: UploadFile = File(...), language: str = Form("en"), db
         print(f"User said: {user_message}")
 
         # 2. Process with Chat Service (SQL Generation)
-        # We don't have history for voice chat yet, passing empty list
         result = await process_chat_message(user_message, db, history=[], language=language)
         text_response = result["response"]
         
-        # 3. Convert Response to Audio (using edge-tts)
+        # 3. Convert Response to Audio (using edge-tts with gTTS fallback)
         voice_map = {
             'hi': 'hi-IN-SwaraNeural',
             'te': 'te-IN-ShrutiNeural',
@@ -66,29 +70,43 @@ async def live_chat(file: UploadFile = File(...), language: str = Form("en"), db
             'gu': 'gu-IN-DhwaniNeural',
             'bn': 'bn-IN-TanishaaNeural',
             'pa': 'pa-IN-OjasNeural',
-            'en': 'en-IN-NeerjaNeural' # Default Indian English
+            'en': 'en-IN-NeerjaNeural'
         }
         
         voice = voice_map.get(language, 'en-IN-NeerjaNeural')
-        communicate = edge_tts.Communicate(text_response, voice)
+        print(f"Generating TTS for: '{text_response}' with voice: {voice}")
+
+        async def audio_stream():
+            try:
+                communicate = edge_tts.Communicate(text_response, voice)
+                async for chunk in communicate.stream():
+                    if chunk["type"] == "audio":
+                        yield chunk["data"]
+            except Exception as e:
+                print(f"EdgeTTS failed: {e}. Falling back to gTTS.")
+                # Fallback to gTTS
+                mp3_fp = io.BytesIO()
+                tts = gTTS(text=text_response, lang=language)
+                tts.write_to_fp(mp3_fp)
+                mp3_fp.seek(0)
+                yield mp3_fp.read()
+
+        # Encode text response for header (handle non-ASCII)
+        encoded_text = quote(text_response)
         
-        mp3_fp = io.BytesIO()
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                mp3_fp.write(chunk["data"])
-                
-        mp3_fp.seek(0)
-        audio_base64 = base64.b64encode(mp3_fp.read()).decode('utf-8')
-        
-        return {
-            "text_response": text_response,
-            "audio_base64": audio_base64,
-            "language": language
-            # "sql_query": result.get("sql_query") # Hidden from frontend
-        }
+        return StreamingResponse(
+            audio_stream(), 
+            media_type="audio/mpeg",
+            headers={
+                "X-Text-Response": encoded_text,
+                "X-Language": language
+            }
+        )
         
     except Exception as e:
         print(f"Error in live chat: {str(e)}")
+        # In case of error before streaming starts, return JSON error
+        # Note: If streaming started, we can't change status code easily.
         return {
             "text_response": "I'm having trouble hearing you. Please try again.",
             "error": str(e)

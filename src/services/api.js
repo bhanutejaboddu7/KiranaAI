@@ -15,9 +15,19 @@ export const sendVoiceMessage = async (audioBlob) => {
     const formData = new FormData();
     formData.append('file', audioBlob, 'voice.webm');
     const response = await api.post('/live/chat', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 'Content-Type': 'multipart/form-data' },
+        responseType: 'blob' // Important: Expect binary data
     });
-    return response.data;
+
+    // Extract text response from headers
+    const textResponse = decodeURIComponent(response.headers['x-text-response'] || '');
+    const language = response.headers['x-language'] || 'en';
+
+    return {
+        audioBlob: response.data,
+        text_response: textResponse,
+        language: language
+    };
 };
 
 export const getInventory = async () => {
