@@ -7,4 +7,4 @@ pydantic
 requests
 python-multipart
 Pillow
-gTTS
+edge-tts
