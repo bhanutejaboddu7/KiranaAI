@@ -80,4 +80,12 @@ export const updateShelfLocations = async (items) => {
     return response.data;
 };
 
+export const getTTS = async (text, language = 'en') => {
+    const response = await api.get('/tts/', {
+        params: { text, language },
+        responseType: 'blob'
+    });
+    return response.data;
+};
+
 
