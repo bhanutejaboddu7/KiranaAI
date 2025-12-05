@@ -67,7 +67,15 @@ const ChatInterface = ({ messages, setMessages }) => {
         if (currentInput.trim() === '') return;
 
         try {
-            if (isListening) await stopListening();
+            // Stop listening when processing starts
+            if (isListening && Capacitor.isNativePlatform()) {
+                try {
+                    await SpeechRecognition.stop();
+                } catch (e) {
+                    // ignore
+                }
+                setIsListening(false);
+            }
         } catch (e) {
             console.error("Error stopping listener:", e);
         }
@@ -98,8 +106,8 @@ const ChatInterface = ({ messages, setMessages }) => {
             }]);
 
             // Only speak if source is voice or live mode is active
-            if (source === 'voice' || isLiveMode) {
-                // Ensure we pass the FRESH logic for auto-restart
+            if (source === 'voice' || isLiveModeRef.current) {
+                // Pass true for autoRestartListening
                 playTTS(responseText, true);
             }
 
@@ -213,19 +221,42 @@ const ChatInterface = ({ messages, setMessages }) => {
     const startListening = async () => {
         if (Capacitor.isNativePlatform()) {
             try {
-                // Ensure we stop any existing session first to prevent "already running" errors
+                // Check and request permissions first
                 try {
-                    await SpeechRecognition.stop();
-                } catch (ignore) { }
+                    const perm = await SpeechRecognition.checkPermissions();
+                    if (perm.speechRecognition !== 'granted') {
+                        await SpeechRecognition.requestPermissions();
+                    }
+                } catch (e) {
+                    console.warn("Permission check failed:", e);
+                }
 
                 const { available } = await SpeechRecognition.available();
                 if (available) {
                     setIsListening(true);
-                    await SpeechRecognition.start({
-                        language: i18n.language === 'hi' ? 'hi-IN' : 'en-US',
-                        partialResults: true,
-                        popup: false,
-                    });
+
+                    try {
+                        await SpeechRecognition.start({
+                            language: i18n.language === 'hi' ? 'hi-IN' : 'en-US',
+                            partialResults: true,
+                            popup: false,
+                        });
+                    } catch (startError) {
+                        console.warn("Start failed, attempting restart:", startError);
+                        // If start failed (e.g. already running), try to stop and start again
+                        try {
+                            await SpeechRecognition.stop();
+                        } catch (ignore) { }
+
+                        await SpeechRecognition.start({
+                            language: i18n.language === 'hi' ? 'hi-IN' : 'en-US',
+                            partialResults: true,
+                            popup: false,
+                        });
+                    }
+                } else {
+                    console.error("Speech recognition not available");
+                    setIsListening(false);
                 }
             } catch (e) {
                 console.error("Native speech error:", e);

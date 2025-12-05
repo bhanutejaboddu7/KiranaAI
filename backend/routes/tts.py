@@ -11,19 +11,19 @@ async def generate_tts(text: str, language: str = "en"):
     try:
         # Voice mapping for edge-tts
         voice_map = {
-            'hi': 'hi-IN-MadhurNeural',
-            'te': 'te-IN-MohanNeural',
-            'ta': 'ta-IN-ValluvarNeural',
+            'hi': 'hi-IN-SwaraNeural',
+            'te': 'te-IN-ShrutiNeural',
+            'ta': 'ta-IN-PallaviNeural',
             'kn': 'kn-IN-GaganNeural',
-            'ml': 'ml-IN-MidhunNeural',
-            'mr': 'mr-IN-ManoharNeural',
-            'gu': 'gu-IN-NiranjanNeural',
-            'bn': 'bn-IN-BashkarNeural',
+            'ml': 'ml-IN-SobhanaNeural',
+            'mr': 'mr-IN-AarohiNeural',
+            'gu': 'gu-IN-DhwaniNeural',
+            'bn': 'bn-IN-TanishaaNeural',
             'pa': 'pa-IN-OjasNeural',
-            'en': 'en-IN-PrabhatNeural'
+            'en': 'en-IN-NeerjaNeural'
         }
         
-        voice = voice_map.get(language, 'en-IN-PrabhatNeural')
+        voice = voice_map.get(language, 'en-IN-NeerjaNeural')
         print(f"Generating TTS for: '{text}' with voice: {voice}")
 
         async def audio_stream():
