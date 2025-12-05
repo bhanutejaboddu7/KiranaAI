@@ -122,6 +122,8 @@ const ChatInterface = ({ messages, setMessages }) => {
         }
     };
 
+    const silenceTimer = useRef(null);
+
     const startListening = async () => {
         if (Capacitor.isNativePlatform()) {
             try {
@@ -136,7 +138,14 @@ const ChatInterface = ({ messages, setMessages }) => {
 
                     SpeechRecognition.addListener('partialResults', (data) => {
                         if (data.matches && data.matches.length > 0) {
-                            setInput(data.matches[0]);
+                            const transcript = data.matches[0];
+                            setInput(transcript);
+
+                            // Auto-send after silence
+                            if (silenceTimer.current) clearTimeout(silenceTimer.current);
+                            silenceTimer.current = setTimeout(() => {
+                                handleSend(null, transcript);
+                            }, 1500);
                         }
                     });
                 }
@@ -150,6 +159,7 @@ const ChatInterface = ({ messages, setMessages }) => {
     };
 
     const stopListening = async () => {
+        if (silenceTimer.current) clearTimeout(silenceTimer.current);
         if (Capacitor.isNativePlatform()) {
             await SpeechRecognition.stop();
             setIsListening(false);
@@ -317,18 +327,49 @@ const ChatInterface = ({ messages, setMessages }) => {
                                     rehypePlugins={[rehypeHighlight]}
                                     components={{
                                         table: ({ node, ...props }) => (
-                                            <div className="overflow-x-auto my-3 rounded-lg border border-border bg-muted/50 shadow-inner">
-                                                <table className="min-w-full divide-y divide-border" {...props} />
+                                            <div className="overflow-x-auto my-4 rounded-xl border border-border/50 bg-card shadow-sm">
+                                                <table className="min-w-full divide-y divide-border/50" {...props} />
                                             </div>
                                         ),
-                                        thead: ({ node, ...props }) => <thead className="bg-muted" {...props} />,
-                                        th: ({ node, ...props }) => <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider" {...props} />,
-                                        tbody: ({ node, ...props }) => <tbody className="divide-y divide-border" {...props} />,
-                                        tr: ({ node, ...props }) => <tr className="hover:bg-muted/50 transition-colors" {...props} />,
-                                        td: ({ node, ...props }) => <td className="px-4 py-3 text-sm text-foreground whitespace-nowrap" {...props} />,
-                                        p: ({ node, ...props }) => <p className="mb-2 last:mb-0" {...props} />,
-                                        ul: ({ node, ...props }) => <ul className="list-disc pl-4 mb-2 space-y-1" {...props} />,
-                                        ol: ({ node, ...props }) => <ol className="list-decimal pl-4 mb-2 space-y-1" {...props} />,
+                                        thead: ({ node, ...props }) => (
+                                            <thead className="bg-muted/50 text-xs uppercase font-semibold text-muted-foreground tracking-wider" {...props} />
+                                        ),
+                                        th: ({ node, ...props }) => (
+                                            <th className="px-5 py-4 text-left" {...props} />
+                                        ),
+                                        tbody: ({ node, ...props }) => (
+                                            <tbody className="divide-y divide-border/50 bg-card" {...props} />
+                                        ),
+                                        tr: ({ node, ...props }) => (
+                                            <tr className="hover:bg-muted/30 transition-colors duration-150 group" {...props} />
+                                        ),
+                                        td: ({ node, ...props }) => (
+                                            <td className="px-5 py-3.5 text-sm text-foreground whitespace-nowrap group-hover:text-primary transition-colors" {...props} />
+                                        ),
+                                        p: ({ node, ...props }) => <p className="mb-3 last:mb-0 leading-relaxed" {...props} />,
+                                        ul: ({ node, ...props }) => <ul className="list-disc pl-5 mb-3 space-y-1.5 marker:text-primary" {...props} />,
+                                        ol: ({ node, ...props }) => <ol className="list-decimal pl-5 mb-3 space-y-1.5 marker:text-primary" {...props} />,
+                                        strong: ({ node, ...props }) => <strong className="font-semibold text-primary" {...props} />,
+                                        blockquote: ({ node, ...props }) => (
+                                            <blockquote className="border-l-4 border-primary/50 pl-4 italic text-muted-foreground my-4" {...props} />
+                                        ),
+                                        code: ({ node, inline, className, children, ...props }) => {
+                                            const match = /language-(\w+)/.exec(className || '');
+                                            return !inline && match ? (
+                                                <div className="relative rounded-lg overflow-hidden my-4 border border-border/50 shadow-sm">
+                                                    <div className="bg-muted/50 px-4 py-2 text-xs font-mono text-muted-foreground border-b border-border/50 flex justify-between">
+                                                        <span>{match[1]}</span>
+                                                    </div>
+                                                    <code className={className} {...props}>
+                                                        {children}
+                                                    </code>
+                                                </div>
+                                            ) : (
+                                                <code className="bg-muted/50 px-1.5 py-0.5 rounded text-sm font-mono text-primary" {...props}>
+                                                    {children}
+                                                </code>
+                                            );
+                                        }
                                     }}
                                 >
                                     {msg.content}

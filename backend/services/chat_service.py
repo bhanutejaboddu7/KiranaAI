@@ -37,7 +37,7 @@ You must **ALWAYS** reply with a valid JSON object. Do not output any text outsi
 ```json
 {
   "type": "answer",
-  "content": "Your friendly natural language response here."
+  "content": "Your friendly natural language response here. **IMPORTANT**: If listing multiple items (products, sales, prices), YOU MUST USE A MARKDOWN TABLE."
 }
 ```
 
@@ -52,7 +52,8 @@ You must **ALWAYS** reply with a valid JSON object. Do not output any text outsi
 **CRITICAL RULES:**
 1.  **Language**: The `content` field MUST be in the SAME language as the user's input (Hindi/Telugu/English).
 2.  **No Technical Terms**: The `content` for "answer" type must be simple and non-technical.
-3.  **Valid JSON**: Ensure the output is strictly valid JSON.
+3.  **Markdown Tables**: When showing lists of data (e.g., "Show all rice products", "List sales today"), format the output as a clean Markdown table.
+4.  **Valid JSON**: Ensure the output is strictly valid JSON.
 """
 
 model = genai.GenerativeModel('gemini-2.5-flash', system_instruction=SYSTEM_PROMPT, generation_config={"response_mime_type": "application/json"})
@@ -136,7 +137,8 @@ async def process_chat_message(message: str, db: Session, history: list = [], la
                    - Example: "Sold 2 milk. Remaining stock: 8"
                    - Example: "Added 10 sugar. Total stock is now: 50"
                 4. **CRITICAL**: Reply in the SAME language as the user's question ({language}).
-                5. **Output Format**: Return a JSON object: `{{ "type": "answer", "content": "..." }}`
+                5. **Formatting**: If the data retrieved contains multiple rows (more than 1), YOU MUST present it as a Markdown Table in your response.
+                6. **Output Format**: Return a JSON object: `{{ "type": "answer", "content": "..." }}`
                 """
                 
                 final_response = chat_session.send_message(answer_prompt)
