@@ -91,7 +91,13 @@ const ChatInterface = ({ messages, setMessages }) => {
                 content: msg.content
             }));
 
-            const data = await chatWithData(currentInput, history, i18n.language);
+            // 15s Timeout for API call to prevent infinite loading
+            const apiCall = chatWithData(currentInput, history, i18n.language);
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("Request timed out")), 15000)
+            );
+
+            const data = await Promise.race([apiCall, timeoutPromise]);
             const responseText = data.response;
 
             setMessages(prev => [...prev, {

@@ -28,6 +28,19 @@ export const useVoiceManager = ({ language = 'en-US', onInputComplete }: UseVoic
 
     useEffect(() => {
         stateRef.current = { voiceState, language, onInputComplete };
+
+        // Safety guard: If stuck in PROCESSING for >20s, reset to IDLE
+        let processGuard: any = null;
+        if (voiceState === VoiceState.PROCESSING) {
+            processGuard = setTimeout(() => {
+                console.error("Stuck in PROCESSING > 20s - Resetting");
+                setVoiceState(VoiceState.IDLE);
+                // Optional: speakResponse("Sorry, I timed out.")? NO, just reset.
+            }, 20000);
+        }
+        return () => {
+            if (processGuard) clearTimeout(processGuard);
+        };
     }, [voiceState, language, onInputComplete]);
 
     const clearTimers = () => {
