@@ -86,10 +86,11 @@ export const useVoiceManager = ({ language = 'en-US', onInputComplete }: UseVoic
                     return;
                 }
 
-                // Ensure fresh start
-                try { await SpeechRecognition.stop(); } catch (e) { }
-                // CRITICAL: Robust delay (250ms) to allow native layer to reset
-                await new Promise(resolve => setTimeout(resolve, 250));
+                // Ensure fresh start - REMOVED preemptive stop to avoid native conflicts if already idle.
+                // try { await SpeechRecognition.stop(); } catch (e) { }
+
+                // CRITICAL: Robust delay (400ms) to allow native layer to reset
+                await new Promise(resolve => setTimeout(resolve, 400));
 
                 // Safety timeout: If no input at all for 8 seconds, go IDLE
                 silenceTimer.current = setTimeout(() => {
@@ -105,9 +106,10 @@ export const useVoiceManager = ({ language = 'en-US', onInputComplete }: UseVoic
                     popup: false,
                 });
 
-            } catch (e) {
+            } catch (e: any) {
                 console.error("Start listening failed:", e);
-                // Revert to IDLE so user can tap to retry
+                // DEBUG: Show alert to user
+                alert("Mic Error: " + (e.message || JSON.stringify(e)));
                 setVoiceState(VoiceState.IDLE);
             } finally {
                 setIsStarting(false);
@@ -210,6 +212,7 @@ export const useVoiceManager = ({ language = 'en-US', onInputComplete }: UseVoic
             // Handle errors (No match, network, etc.)
             SpeechRecognition.addListener('onError' as any, (err: any) => {
                 console.error("Speech Recognition Error:", err);
+                alert("Native Error: " + (err.message || JSON.stringify(err)));
                 // If error occurs, revert to IDLE to allow retry
                 setVoiceState(VoiceState.IDLE);
             });
