@@ -16,6 +16,7 @@ const ChatInterface = ({ messages, setMessages }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [isListening, setIsListening] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
+    const [isLiveMode, setIsLiveMode] = useState(false);
 
     const messagesEndRef = useRef(null);
     const recognitionRef = useRef(null);
@@ -35,7 +36,7 @@ const ChatInterface = ({ messages, setMessages }) => {
             const recognition = new window.webkitSpeechRecognition();
             recognition.continuous = false;
             recognition.interimResults = true;
-            recognition.lang = i18n.language === 'hi' ? 'hi-IN' : 'en-US'; // Basic mapping
+            recognition.lang = i18n.language === 'hi' ? 'hi-IN' : 'en-US';
 
             recognition.onstart = () => setIsListening(true);
             recognition.onend = () => setIsListening(false);
@@ -46,7 +47,6 @@ const ChatInterface = ({ messages, setMessages }) => {
                     .join('');
                 setInput(transcript);
 
-                // Auto-send if final result
                 if (event.results[0].isFinal) {
                     handleSend(null, transcript);
                 }
@@ -62,12 +62,7 @@ const ChatInterface = ({ messages, setMessages }) => {
 
         if (!textToSend.trim()) return;
 
-        // Stop listening if active
-        if (isListening) {
-            stopListening();
-        }
-
-        // Stop any current audio
+        if (isListening) stopListening();
         if (isSpeaking) {
             audioRef.current.pause();
             setIsSpeaking(false);
@@ -83,7 +78,6 @@ const ChatInterface = ({ messages, setMessages }) => {
                 content: msg.content
             }));
 
-            // 1. Get Text Response
             const data = await chatWithData(textToSend, history, i18n.language);
             const responseText = data.response;
 
@@ -93,8 +87,7 @@ const ChatInterface = ({ messages, setMessages }) => {
                 sql: data.sql_query
             }]);
 
-            // 2. Play Audio Response (TTS)
-            playTTS(responseText);
+            playTTS(responseText, isLiveMode);
 
         } catch (error) {
             console.error("Chat error:", error);
@@ -102,12 +95,13 @@ const ChatInterface = ({ messages, setMessages }) => {
                 role: 'assistant',
                 content: t('error_processing_request')
             }]);
+            setIsLoading(false);
         } finally {
             setIsLoading(false);
         }
     };
 
-    const playTTS = async (text) => {
+    const playTTS = async (text, autoRestartListening = false) => {
         try {
             setIsSpeaking(true);
             const audioBlob = await getTTS(text, i18n.language);
@@ -117,6 +111,9 @@ const ChatInterface = ({ messages, setMessages }) => {
             audioRef.current.onended = () => {
                 setIsSpeaking(false);
                 URL.revokeObjectURL(audioUrl);
+                if (autoRestartListening && isLiveMode) {
+                    setTimeout(() => startListening(), 500);
+                }
             };
             audioRef.current.play();
         } catch (error) {
@@ -127,7 +124,6 @@ const ChatInterface = ({ messages, setMessages }) => {
 
     const startListening = async () => {
         if (Capacitor.isNativePlatform()) {
-            // Native implementation
             try {
                 const { available } = await SpeechRecognition.available();
                 if (available) {
@@ -149,7 +145,6 @@ const ChatInterface = ({ messages, setMessages }) => {
                 setIsListening(false);
             }
         } else {
-            // Browser implementation
             recognitionRef.current?.start();
         }
     };
@@ -160,6 +155,20 @@ const ChatInterface = ({ messages, setMessages }) => {
             setIsListening(false);
         } else {
             recognitionRef.current?.stop();
+        }
+    };
+
+    const toggleLiveMode = () => {
+        if (isLiveMode) {
+            setIsLiveMode(false);
+            stopListening();
+            if (isSpeaking) {
+                audioRef.current.pause();
+                setIsSpeaking(false);
+            }
+        } else {
+            setIsLiveMode(true);
+            startListening();
         }
     };
 
@@ -187,13 +196,95 @@ const ChatInterface = ({ messages, setMessages }) => {
                         </p>
                     </div>
                 </div>
-                {isSpeaking && (
-                    <div className="flex items-center gap-2 px-3 py-1 bg-primary/10 rounded-full animate-pulse">
-                        <Volume2 size={14} className="text-primary" />
-                        <span className="text-xs font-medium text-primary">{t('speaking')}...</span>
-                    </div>
-                )}
+
+                {/* Live Mode Toggle Button */}
+                <button
+                    onClick={toggleLiveMode}
+                    className={cn(
+                        "p-2.5 rounded-full transition-all active:scale-95",
+                        isLiveMode
+                            ? "bg-red-500/10 text-red-500 animate-pulse"
+                            : "bg-primary/10 text-primary hover:bg-primary/20"
+                    )}
+                    title={t('live_mode')}
+                >
+                    {isLiveMode ? <X size={20} /> : <Mic size={20} />}
+                </button>
             </div>
+
+            {/* Live Mode Overlay */}
+            {isLiveMode && (
+                <div className="absolute inset-0 z-50 bg-background/95 backdrop-blur-xl flex flex-col items-center justify-center transition-all duration-500 animate-in fade-in">
+
+                    {/* Top Controls */}
+                    <div className="absolute top-0 left-0 right-0 p-6 pt-safe flex justify-between items-center z-10">
+                        <div className="flex items-center gap-2 text-foreground/70">
+                            <Sparkles size={18} className="text-primary" />
+                            <span className="text-sm font-medium tracking-wide">KiranaAI Live</span>
+                        </div>
+                        <button
+                            onClick={toggleLiveMode}
+                            className="p-3 bg-muted hover:bg-muted/80 rounded-full text-foreground transition-colors"
+                        >
+                            <X size={24} />
+                        </button>
+                    </div>
+
+                    {/* Visualizer */}
+                    <div className="flex-1 flex flex-col items-center justify-center w-full relative px-6">
+
+                        {/* Status Text */}
+                        <div className="absolute top-1/4 text-center space-y-2 animate-in slide-in-from-bottom-4 duration-700 w-full">
+                            <h2 className="text-2xl md:text-3xl font-semibold text-foreground tracking-tight">
+                                {isLoading ? t('thinking') : isSpeaking ? t('speaking') : t('listening')}
+                            </h2>
+                            {/* Show live transcript or response preview */}
+                            <p className="text-muted-foreground text-lg max-w-md mx-auto line-clamp-3">
+                                {isLoading ? "..." : (input || (messages[messages.length - 1]?.role === 'assistant' ? messages[messages.length - 1].content : ""))}
+                            </p>
+                        </div>
+
+                        {/* Orb Animation */}
+                        <div className="relative w-64 h-64 flex items-center justify-center mt-12">
+                            <div
+                                className={cn(
+                                    "absolute w-32 h-32 rounded-full blur-3xl transition-all duration-300",
+                                    isListening ? "bg-primary/60 scale-110" : "bg-secondary/40",
+                                    isLoading && "bg-purple-500/60 animate-pulse",
+                                    isSpeaking && "bg-green-500/60 scale-125"
+                                )}
+                            />
+                            <div className={cn(
+                                "absolute inset-0 border-2 rounded-full opacity-20 transition-all duration-1000",
+                                isListening ? "border-primary animate-ping-slow" : "border-muted-foreground scale-90"
+                            )} />
+
+                            <div className={cn(
+                                "relative z-10 w-24 h-24 rounded-full flex items-center justify-center transition-transform duration-500 bg-background/50 backdrop-blur-sm border border-white/10",
+                                isListening ? "scale-110" : "scale-100"
+                            )}>
+                                {isLoading ? (
+                                    <Loader2 size={48} className="text-primary animate-spin" />
+                                ) : isSpeaking ? (
+                                    <Volume2 size={48} className="text-green-500 animate-pulse" />
+                                ) : (
+                                    <Mic size={48} className={cn("text-foreground", isListening && "text-primary")} />
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Bottom Controls */}
+                    <div className="p-8 w-full flex justify-center pb-safe">
+                        <button
+                            onClick={toggleLiveMode}
+                            className="px-8 py-3 rounded-full bg-destructive/10 text-destructive border border-destructive/20 font-medium hover:bg-destructive/20 transition-colors"
+                        >
+                            {t('end_session')}
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Messages Area */}
             <div className="flex-1 overflow-y-auto p-4 pt-[calc(4rem+env(safe-area-inset-top))] space-y-6 scroll-smooth no-scrollbar">
@@ -225,7 +316,6 @@ const ChatInterface = ({ messages, setMessages }) => {
                                     remarkPlugins={[remarkGfm]}
                                     rehypePlugins={[rehypeHighlight]}
                                     components={{
-                                        // ... (Keep existing markdown components)
                                         table: ({ node, ...props }) => (
                                             <div className="overflow-x-auto my-3 rounded-lg border border-border bg-muted/50 shadow-inner">
                                                 <table className="min-w-full divide-y divide-border" {...props} />
@@ -269,24 +359,10 @@ const ChatInterface = ({ messages, setMessages }) => {
                             type="text"
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            placeholder={isListening ? t('listening') + "..." : t('ask_anything')}
-                            className="w-full pl-4 pr-12 py-3.5 bg-transparent text-foreground placeholder-muted-foreground focus:outline-none rounded-2xl"
+                            placeholder={t('ask_anything')}
+                            className="w-full px-4 py-3.5 bg-transparent text-foreground placeholder-muted-foreground focus:outline-none rounded-2xl"
                             disabled={isLoading}
                         />
-
-                        {/* Mic Button inside Input */}
-                        <button
-                            type="button"
-                            onClick={toggleListening}
-                            className={cn(
-                                "absolute right-1.5 p-2 rounded-xl transition-all active:scale-95",
-                                isListening
-                                    ? "bg-red-500 text-white animate-pulse"
-                                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                            )}
-                        >
-                            {isListening ? <X size={18} /> : <Mic size={18} />}
-                        </button>
                     </div>
 
                     <button

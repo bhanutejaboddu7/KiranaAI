@@ -12,6 +12,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { AppDataProvider } from './context/AppDataContext';
 
 import { App as CapacitorApp } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import { useNavigate } from 'react-router-dom';
 import { Camera } from '@capacitor/camera';
 import { SpeechRecognition } from '@capacitor-community/speech-recognition';
@@ -50,17 +51,18 @@ function App() {
 
   React.useEffect(() => {
     const requestPermissions = async () => {
-      try {
-        console.log("Requesting permissions...");
-        await Camera.requestPermissions();
-        // SpeechRecognition might fail on web, so wrap it
+      if (Capacitor.isNativePlatform()) {
         try {
-          await SpeechRecognition.requestPermissions();
-        } catch (err) {
-          console.warn("Speech recognition permissions failed (might be on web):", err);
+          console.log("Requesting permissions...");
+          await Camera.requestPermissions();
+          try {
+            await SpeechRecognition.requestPermissions();
+          } catch (err) {
+            console.warn("Speech recognition permissions failed:", err);
+          }
+        } catch (e) {
+          console.error("Error requesting permissions:", e);
         }
-      } catch (e) {
-        console.error("Error requesting permissions:", e);
       }
     };
     requestPermissions();
