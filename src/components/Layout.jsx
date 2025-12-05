@@ -51,7 +51,6 @@ const Layout = ({ children }) => {
                 <div className="p-4 mt-auto space-y-4">
                     <div className="flex items-center justify-between px-2">
                         <span className="text-sm font-medium text-muted-foreground">Theme</span>
-                        <ThemeToggle />
                     </div>
                     <div className="bg-muted/50 rounded-2xl p-4 border border-border">
                         <div className="flex items-center gap-3">
@@ -73,7 +72,6 @@ const Layout = ({ children }) => {
                             </div>
                             <h1 className="text-lg font-bold text-foreground">KiranaAI</h1>
                         </div>
-                        <ThemeToggle />
                     </div>
                 )}
 
