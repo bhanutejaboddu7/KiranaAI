@@ -153,22 +153,39 @@ export const useVoiceManager = ({ language = 'en-US', onInputComplete }: UseVoic
 
         try {
             if (Capacitor.isNativePlatform()) {
-                // Wrap TTS in a timeout so it doesn't hang forever
-                const ttsPromise = TextToSpeech.speak({
-                    text,
-                    lang: stateRef.current.language,
-                    rate: 1.0,
-                    pitch: 1.0,
-                    category: 'ambient',
-                });
+                const speakWithTimeout = async (lang: string) => {
+                    const ttsPromise = TextToSpeech.speak({
+                        text,
+                        lang,
+                        rate: 1.0,
+                        pitch: 1.0,
+                        category: 'ambient',
+                    });
+                    const timeoutPromise = new Promise((_, reject) =>
+                        setTimeout(() => reject(new Error("TTS Timed out")), 5000)
+                    );
+                    await Promise.race([ttsPromise, timeoutPromise]);
+                };
 
-                const timeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error("TTS Timed out")), 10000)
-                );
+                try {
+                    // Try preferred language first (e.g., 'hi-IN', 'en-IN')
+                    await speakWithTimeout(stateRef.current.language);
+                } catch (primaryErr) {
+                    console.warn(`TTS failed for ${stateRef.current.language}`, primaryErr);
 
-                await Promise.race([ttsPromise, timeoutPromise]);
+                    // Smart Fallback: Only fallback to en-US if the target was already English
+                    // (e.g. en-IN failed -> en-US ok. But hi-IN failed -> don't speak English)
+                    if (stateRef.current.language.startsWith('en')) {
+                        console.log("English locale failed, trying en-US fallback...");
+                        try {
+                            await speakWithTimeout('en-US');
+                        } catch (secondaryErr) {
+                            console.error("TTS Fallback failed:", secondaryErr);
+                        }
+                    }
+                }
 
-                // When promise resolves, TTS is done
+                // When promise resolves (or fails twice), TTS is done
                 handleTTSComplete();
             } else {
                 // Web fallback
