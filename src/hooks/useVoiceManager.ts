@@ -247,7 +247,7 @@ export const useVoiceManager = ({ language = 'en-US', onInputComplete }: UseVoic
 
         if (Capacitor.isNativePlatform()) {
             try {
-                console.log(`Attempting Native TTS in ${stateRef.current.language}`);
+                console.log(`[VoiceManager] Attempting Native TTS with locale: ${stateRef.current.language}`);
                 const ttsPromise = TextToSpeech.speak({
                     text,
                     lang: stateRef.current.language,
