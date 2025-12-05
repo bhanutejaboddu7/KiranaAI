@@ -148,26 +148,38 @@ export const useVoiceManager = ({ language = 'en-US', onInputComplete }: UseVoic
         setVoiceState(VoiceState.SPEAKING);
         setIsSpeaking(true);
 
+        // DEBUG: Trace output
+        // alert("Speaking: " + text.substring(0, 20) + "...");
+
         try {
             if (Capacitor.isNativePlatform()) {
-                await TextToSpeech.speak({
+                // Wrap TTS in a timeout so it doesn't hang forever
+                const ttsPromise = TextToSpeech.speak({
                     text,
                     lang: stateRef.current.language,
                     rate: 1.0,
                     pitch: 1.0,
                     category: 'ambient',
                 });
+
+                const timeoutPromise = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error("TTS Timed out")), 10000)
+                );
+
+                await Promise.race([ttsPromise, timeoutPromise]);
+
                 // When promise resolves, TTS is done
                 handleTTSComplete();
             } else {
-                // Web fallback (using browser speech synthesis)
+                // Web fallback
                 const utterance = new SpeechSynthesisUtterance(text);
                 utterance.lang = stateRef.current.language;
                 utterance.onend = () => handleTTSComplete();
                 window.speechSynthesis.speak(utterance);
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error("TTS Error:", e);
+            // alert("TTS Error: " + e.message); // Optional debug
             handleTTSComplete();
         }
     }, [startListening]);
