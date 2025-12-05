@@ -23,19 +23,16 @@ export const useVoiceManager = ({ language = 'en-US', onInputComplete }: UseVoic
 
     const silenceTimer = useRef<any>(null);
     const processTimer = useRef<any>(null);
-    // Ref to access current state in async callbacks
     const stateRef = useRef({ voiceState, language, onInputComplete });
 
     useEffect(() => {
         stateRef.current = { voiceState, language, onInputComplete };
 
-        // Safety guard: If stuck in PROCESSING for >20s, reset to IDLE
         let processGuard: any = null;
         if (voiceState === VoiceState.PROCESSING) {
             processGuard = setTimeout(() => {
                 console.error("Stuck in PROCESSING > 20s - Resetting");
                 setVoiceState(VoiceState.IDLE);
-                // Optional: speakResponse("Sorry, I timed out.")? NO, just reset.
             }, 20000);
         }
         return () => {
@@ -68,46 +65,36 @@ export const useVoiceManager = ({ language = 'en-US', onInputComplete }: UseVoic
         if (Capacitor.isNativePlatform()) {
             try {
                 await SpeechRecognition.stop();
-            } catch (e) {
-                // Ignore stop errors
-            }
+            } catch (e) { }
         }
         setVoiceState(VoiceState.IDLE);
     }, []);
 
     const startListening = useCallback(async () => {
-        // Interruption logic: If currently speaking, stop TTS
         if (stateRef.current.voiceState === VoiceState.SPEAKING) {
             try {
                 await TextToSpeech.stop();
-            } catch (e) { console.error("Error stopping TTS:", e); }
+            } catch (e) { }
+            window.speechSynthesis.cancel();
             setIsSpeaking(false);
         }
 
         clearTimers();
         setTranscript('');
-
-        // Optimistic update removed - using isStarting
         setIsStarting(true);
 
         if (Capacitor.isNativePlatform()) {
             try {
                 const hasPerm = await checkPermissions();
                 if (!hasPerm) {
-                    console.error("Permissions denied");
                     setVoiceState(VoiceState.IDLE);
                     return;
                 }
 
-                // Ensure fresh start - REMOVED preemptive stop to avoid native conflicts if already idle.
-                // try { await SpeechRecognition.stop(); } catch (e) { }
-
-                // CRITICAL: Robust delay (400ms) to allow native layer to reset
                 await new Promise(resolve => setTimeout(resolve, 400));
 
-                // Safety timeout: If no input at all for 8 seconds, go IDLE
                 silenceTimer.current = setTimeout(() => {
-                    console.log("Silence timeout - stopping listener");
+                    console.log("Silence timeout");
                     stopListening();
                 }, 8000);
 
@@ -121,14 +108,13 @@ export const useVoiceManager = ({ language = 'en-US', onInputComplete }: UseVoic
 
             } catch (e: any) {
                 console.error("Start listening failed:", e);
-                // DEBUG: Show alert to user
                 alert("Mic Error: " + (e.message || JSON.stringify(e)));
                 setVoiceState(VoiceState.IDLE);
             } finally {
                 setIsStarting(false);
             }
         } else {
-            console.warn("Web Speech API not fully implemented in this native-focused hook");
+            // Web not fully supported in this specialized hook
             setVoiceState(VoiceState.IDLE);
             setIsStarting(false);
         }
@@ -136,77 +122,79 @@ export const useVoiceManager = ({ language = 'en-US', onInputComplete }: UseVoic
 
     const speakResponse = useCallback(async (text: string) => {
         if (!text) {
-            // If no text, just restart loop immediately?
             setTimeout(() => startListening(), 500);
             return;
         }
 
-        // Ensure we aren't listening
         clearTimers();
         try { await SpeechRecognition.stop(); } catch (e) { }
+        try { await TextToSpeech.stop(); } catch (e) { }
+        window.speechSynthesis.cancel();
 
         setVoiceState(VoiceState.SPEAKING);
         setIsSpeaking(true);
 
-        // DEBUG: Trace output
-        // alert("Speaking: " + text.substring(0, 20) + "...");
+        const onComplete = () => {
+            console.log("TTS Complete - Restarting Listener");
+            setIsSpeaking(false);
+            setTimeout(() => {
+                startListening();
+            }, 500);
+        };
 
-        try {
-            if (Capacitor.isNativePlatform()) {
-                const speakWithTimeout = async (lang: string) => {
-                    const ttsPromise = TextToSpeech.speak({
-                        text,
-                        lang,
-                        rate: 1.0,
-                        pitch: 1.0,
-                        category: 'ambient',
-                    });
-                    const timeoutPromise = new Promise((_, reject) =>
-                        setTimeout(() => reject(new Error("TTS Timed out")), 5000)
-                    );
-                    await Promise.race([ttsPromise, timeoutPromise]);
+        const attemptWebSpeech = () => {
+            console.log("Falling back to Web Speech API...");
+            try {
+                const utterance = new SpeechSynthesisUtterance(text);
+                // Strict Locale: No 'en-US' fallback if 'hi-IN' implies native
+                utterance.lang = stateRef.current.language;
+                utterance.rate = 1.0;
+
+                utterance.onend = () => onComplete();
+                utterance.onerror = (e) => {
+                    console.error("Web Speech API Error:", e);
+                    onComplete();
                 };
 
-                try {
-                    // Try preferred language first (e.g., 'hi-IN', 'en-IN')
-                    await speakWithTimeout(stateRef.current.language);
-                } catch (primaryErr) {
-                    console.warn(`TTS failed for ${stateRef.current.language}`, primaryErr);
-
-                    // Smart Fallback: Only fallback to en-US if the target was already English
-                    // (e.g. en-IN failed -> en-US ok. But hi-IN failed -> don't speak English)
-                    if (stateRef.current.language.startsWith('en')) {
-                        console.log("English locale failed, trying en-US fallback...");
-                        try {
-                            await speakWithTimeout('en-US');
-                        } catch (secondaryErr) {
-                            console.error("TTS Fallback failed:", secondaryErr);
-                        }
+                setTimeout(() => {
+                    if (window.speechSynthesis.speaking) {
+                        window.speechSynthesis.cancel();
+                        onComplete();
                     }
-                }
+                }, 10000);
 
-                // When promise resolves (or fails twice), TTS is done
-                handleTTSComplete();
-            } else {
-                // Web fallback
-                const utterance = new SpeechSynthesisUtterance(text);
-                utterance.lang = stateRef.current.language;
-                utterance.onend = () => handleTTSComplete();
                 window.speechSynthesis.speak(utterance);
+            } catch (e) {
+                console.error("Web Speech Fatal Error:", e);
+                onComplete();
             }
-        } catch (e: any) {
-            console.error("TTS Error:", e);
-            // alert("TTS Error: " + e.message); // Optional debug
-            handleTTSComplete();
-        }
-    }, [startListening]);
+        };
 
-    const handleTTSComplete = useCallback(() => {
-        setIsSpeaking(false);
-        // CRITICAL: 500ms delay to release audio focus before listening
-        setTimeout(() => {
-            startListening();
-        }, 500);
+        if (Capacitor.isNativePlatform()) {
+            try {
+                console.log(`Attempting Native TTS in ${stateRef.current.language}`);
+                const ttsPromise = TextToSpeech.speak({
+                    text,
+                    lang: stateRef.current.language,
+                    rate: 1.0,
+                    pitch: 1.0,
+                    category: 'ambient',
+                });
+
+                const timeoutPromise = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error("Native TTS Timed out")), 3500)
+                );
+
+                await Promise.race([ttsPromise, timeoutPromise]);
+                onComplete();
+
+            } catch (nativeErr) {
+                console.warn("Native TTS failed, trying Web Fallback", nativeErr);
+                attemptWebSpeech();
+            }
+        } else {
+            attemptWebSpeech();
+        }
     }, [startListening]);
 
     const cancelOutput = useCallback(async () => {
@@ -214,14 +202,12 @@ export const useVoiceManager = ({ language = 'en-US', onInputComplete }: UseVoic
         if (Capacitor.isNativePlatform()) {
             try { await TextToSpeech.stop(); } catch (e) { }
             try { await SpeechRecognition.stop(); } catch (e) { }
-        } else {
-            window.speechSynthesis.cancel();
         }
+        window.speechSynthesis.cancel();
         setIsSpeaking(false);
         setVoiceState(VoiceState.IDLE);
     }, []);
 
-    // Setup Listeners
     useEffect(() => {
         let listenerHandle: any = null;
 
@@ -232,30 +218,23 @@ export const useVoiceManager = ({ language = 'en-US', onInputComplete }: UseVoic
                     const text = results[0];
                     setTranscript(text);
 
-                    // User is speaking, so reset silence timer
                     if (silenceTimer.current) clearTimeout(silenceTimer.current);
-
-                    // Set/Reset "Done Speaking" timer
-                    // This creates the "Safety Loop" - waiting for pause in speech
                     if (processTimer.current) clearTimeout(processTimer.current);
 
                     processTimer.current = setTimeout(() => {
-                        // Consolidate input
                         setVoiceState(VoiceState.PROCESSING);
                         if (stateRef.current.onInputComplete) {
                             stateRef.current.onInputComplete(text);
                         }
-                    }, 1500); // 1.5s pause = done speaking
+                    }, 1500);
                 }
             }).then(handle => {
                 listenerHandle = handle;
             });
 
-            // Handle errors (No match, network, etc.)
             SpeechRecognition.addListener('onError' as any, (err: any) => {
                 console.error("Speech Recognition Error:", err);
                 alert("Native Error: " + (err.message || JSON.stringify(err)));
-                // If error occurs, revert to IDLE to allow retry
                 setVoiceState(VoiceState.IDLE);
             });
 
