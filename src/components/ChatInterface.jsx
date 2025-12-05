@@ -202,9 +202,11 @@ const ChatInterface = ({ messages, setMessages }) => {
                         {/* Status Text */}
                         <div className="absolute top-1/4 text-center space-y-2 animate-in slide-in-from-bottom-4 duration-700 w-full">
                             <h2 className="text-2xl md:text-3xl font-semibold text-foreground tracking-tight">
-                                {voiceState === VoiceState.PROCESSING || isLoading ? t('thinking') :
-                                    voiceState === VoiceState.SPEAKING ? t('speaking') :
-                                        voiceState === VoiceState.LISTENING ? t('listening') : t('tap_to_resume') || "Tap to Resume"}
+                                {isStarting ? (t('starting') || "Starting...") :
+                                    voiceState === VoiceState.PROCESSING || isLoading ? t('thinking') :
+                                        voiceState === VoiceState.SPEAKING ? t('speaking') :
+                                            voiceState === VoiceState.LISTENING ? t('listening') :
+                                                (t('tap_to_resume') === 'tap_to_resume' ? "Tap to Resume" : t('tap_to_resume'))}
                             </h2>
                             {/* Show live transcript or response preview */}
                             <p className="text-muted-foreground text-lg max-w-md mx-auto line-clamp-3">

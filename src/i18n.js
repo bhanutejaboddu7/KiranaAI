@@ -46,7 +46,9 @@ const resources = {
             "alerts": "Alerts",
             "catalog": "Catalog",
             "prices": "Prices",
-            "reorder": "Reorder"
+            "reorder": "Reorder",
+            "tap_to_resume": "Tap to Resume",
+            "starting": "Starting..."
         }
     },
     hi: {
