@@ -4,23 +4,53 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import 'highlight.js/styles/github-dark.css';
 import { Send, Bot, User, Loader2, Mic, X, Radio, Sparkles, Volume2 } from 'lucide-react';
-import { chatWithData, getTTS } from '../services/api';
+import { chatWithData } from '../services/api';
 import { cn } from '../lib/utils';
-import { SpeechRecognition } from '@capacitor-community/speech-recognition';
-import { Capacitor } from '@capacitor/core';
 import { useTranslation } from 'react-i18next';
+import { useVoiceManager, VoiceState } from '../hooks/useVoiceManager';
 
 const ChatInterface = ({ messages, setMessages }) => {
     const { t, i18n } = useTranslation();
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [isListening, setIsListening] = useState(false);
-    const [isSpeaking, setIsSpeaking] = useState(false);
     const [isLiveMode, setIsLiveMode] = useState(false);
 
     const messagesEndRef = useRef(null);
-    const recognitionRef = useRef(null);
-    const audioRef = useRef(new Audio());
+
+    // Internal handler for voice input completion
+    const handleVoiceInput = (text) => {
+        handleSend(null, text, 'voice');
+    };
+
+    // Helper to get correct locale for Indian languages
+    const getVoiceLocale = (lang) => {
+        const localeMap = {
+            'hi': 'hi-IN',
+            'bn': 'bn-IN',
+            'te': 'te-IN',
+            'ta': 'ta-IN',
+            'mr': 'mr-IN',
+            'gu': 'gu-IN',
+            'kn': 'kn-IN',
+            'ml': 'ml-IN',
+            'pa': 'pa-IN',
+            'en': 'en-IN'
+        };
+        return localeMap[lang] || 'en-IN';
+    };
+
+    const {
+        voiceState,
+        transcript,
+        isSpeaking,
+        startListening,
+        stopListening,
+        speakResponse,
+        cancelOutput
+    } = useVoiceManager({
+        language: getVoiceLocale(i18n.language),
+        onInputComplete: handleVoiceInput
+    });
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -30,63 +60,27 @@ const ChatInterface = ({ messages, setMessages }) => {
         scrollToBottom();
     }, [messages, isLoading]);
 
-    // Initialize Web Speech API for browser
+    // Sync transcript to input for visibility
     useEffect(() => {
-        if (!Capacitor.isNativePlatform() && 'webkitSpeechRecognition' in window) {
-            const recognition = new window.webkitSpeechRecognition();
-            recognition.continuous = false;
-            recognition.interimResults = true;
-            recognition.lang = i18n.language === 'hi' ? 'hi-IN' : 'en-US';
-
-            recognition.onstart = () => setIsListening(true);
-            recognition.onend = () => setIsListening(false);
-
-            recognition.onresult = (event) => {
-                const transcript = Array.from(event.results)
-                    .map(result => result[0].transcript)
-                    .join('');
-                setInput(transcript);
-
-                if (event.results[0].isFinal) {
-                    handleSend(null, transcript, 'voice');
-                }
-            };
-
-            recognitionRef.current = recognition;
+        if (voiceState === VoiceState.LISTENING && transcript) {
+            setInput(transcript);
         }
-    }, [i18n.language]);
+    }, [voiceState, transcript]);
 
     const handleSend = async (e, textOverride = null, source = 'text') => {
         if (e) e.preventDefault();
 
-        // Use ref for latest state if called from listener closure
-        const currentInput = textOverride || (stateRef.current ? stateRef.current.input : input);
-        const currentMessages = stateRef.current ? stateRef.current.messages : messages;
-        const currentLang = stateRef.current ? stateRef.current.i18n.language : i18n.language;
+        const currentInput = textOverride || input;
 
         if (currentInput.trim() === '') return;
 
-        try {
-            // Stop listening when processing starts
-            if (isListening && Capacitor.isNativePlatform()) {
-                try {
-                    await SpeechRecognition.stop();
-                } catch (e) {
-                    // ignore
-                }
-                setIsListening(false);
-            }
-        } catch (e) {
-            console.error("Error stopping listener:", e);
-        }
-
-        if (isSpeaking) {
-            audioRef.current.pause();
-            setIsSpeaking(false);
+        // If manual send while speaking, stop speaking
+        if (voiceState === VoiceState.SPEAKING) {
+            cancelOutput();
         }
 
         setInput('');
-        const newMessages = [...currentMessages, { role: 'user', content: currentInput }];
+        const newMessages = [...messages, { role: 'user', content: currentInput }];
         setMessages(newMessages);
         setIsLoading(true);
 
@@ -96,7 +90,7 @@ const ChatInterface = ({ messages, setMessages }) => {
                 content: msg.content
             }));
 
-            const data = await chatWithData(currentInput, history, currentLang);
+            const data = await chatWithData(currentInput, history, i18n.language);
             const responseText = data.response;
 
             setMessages(prev => [...prev, {
@@ -105,10 +99,22 @@ const ChatInterface = ({ messages, setMessages }) => {
                 sql: data.sql_query
             }]);
 
-            // Only speak if source is voice or live mode is active
-            if (source === 'voice' || isLiveModeRef.current) {
-                // Pass true for autoRestartListening
-                playTTS(responseText, true);
+            // If source was voice or we are in live mode, speak the response
+            if (source === 'voice' || isLiveMode) {
+                // Optimize text for speech
+                let speakableText = responseText.replace(/```[\s\S]*?```/g, '');
+                speakableText = speakableText.replace(/^\|.*$/gm, '');
+                speakableText = speakableText.replace(/^[-| :]+$/gm, '');
+                speakableText = speakableText.replace(/\n+/g, ' ').trim();
+
+                if (speakableText) {
+                    speakResponse(speakableText);
+                } else {
+                    // If nothing to speak, ensure we go back to listening if in live mode
+                    if (isLiveMode) {
+                        setTimeout(() => startListening(), 500);
+                    }
+                }
             }
 
         } catch (error) {
@@ -117,191 +123,27 @@ const ChatInterface = ({ messages, setMessages }) => {
                 role: 'assistant',
                 content: t('error_processing_request')
             }]);
-            setIsLoading(false);
+
+            if (isLiveMode) {
+                speakResponse(t('error_processing_request'));
+            }
         } finally {
             setIsLoading(false);
-        }
-    };
-
-    const playTTS = async (text, autoRestartListening = false) => {
-        try {
-            // Indicate speaking immediately to reduce perceived latency
-            setIsSpeaking(true);
-
-            // Optimize text for speech: Remove markdown tables and code blocks
-            let speakableText = text.replace(/```[\s\S]*?```/g, '');
-            speakableText = speakableText.replace(/^\|.*$/gm, '');
-            speakableText = speakableText.replace(/^[-| :]+$/gm, '');
-            speakableText = speakableText.replace(/\n+/g, ' ').trim();
-
-            if (!speakableText) {
-                setIsSpeaking(false);
-                if (autoRestartListening && isLiveModeRef.current) {
-                    setTimeout(startListening, 300);
-                }
-                return;
-            }
-
-            const audioBlob = await getTTS(speakableText, i18n.language);
-            const audioUrl = URL.createObjectURL(audioBlob);
-
-            audioRef.current.src = audioUrl;
-
-            // Define onended handler *before* playing
-            audioRef.current.onended = () => {
-                setIsSpeaking(false);
-                URL.revokeObjectURL(audioUrl);
-
-                // Check Ref for accurate Live Mode status
-                if (autoRestartListening && isLiveModeRef.current) {
-                    console.log("Auto-restarting listener...");
-                    setTimeout(startListening, 300);
-                }
-            };
-
-            // Handle playback errors
-            audioRef.current.onerror = () => {
-                console.error("Audio playback error");
-                setIsSpeaking(false);
-                if (autoRestartListening && isLiveModeRef.current) {
-                    setTimeout(startListening, 300);
-                }
-            };
-
-            await audioRef.current.play();
-        } catch (error) {
-            console.error("TTS Error:", error);
-            setIsSpeaking(false);
-            // Even on error, try to restart listening if in live mode
-            if (autoRestartListening && isLiveModeRef.current) {
-                setTimeout(startListening, 300);
-            }
-        }
-    };
-
-    const silenceTimer = useRef(null);
-
-    // Keep refs up to date
-    const stateRef = useRef({ input, messages, i18n });
-    const isLiveModeRef = useRef(isLiveMode);
-
-    useEffect(() => {
-        stateRef.current = { input, messages, i18n };
-    }, [input, messages, i18n]);
-
-    useEffect(() => {
-        isLiveModeRef.current = isLiveMode;
-    }, [isLiveMode]);
-
-    // Setup Speech Recognition Listener ONCE
-    useEffect(() => {
-        if (Capacitor.isNativePlatform()) {
-            SpeechRecognition.removeAllListeners().then(() => {
-                SpeechRecognition.addListener('partialResults', (data) => {
-                    if (data.matches && data.matches.length > 0) {
-                        const transcript = data.matches[0];
-                        setInput(transcript);
-
-                        // Auto-send after silence
-                        if (silenceTimer.current) clearTimeout(silenceTimer.current);
-                        silenceTimer.current = setTimeout(() => {
-                            handleSend(null, transcript, 'voice');
-                        }, 1500);
-                    }
-                });
-            });
-
-            return () => {
-                SpeechRecognition.removeAllListeners();
-                if (silenceTimer.current) clearTimeout(silenceTimer.current);
-            };
-        }
-    }, []);
-
-    const startListening = async () => {
-        if (Capacitor.isNativePlatform()) {
-            try {
-                // Check and request permissions first
-                try {
-                    const perm = await SpeechRecognition.checkPermissions();
-                    if (perm.speechRecognition !== 'granted') {
-                        await SpeechRecognition.requestPermissions();
-                    }
-                } catch (e) {
-                    console.warn("Permission check failed:", e);
-                }
-
-                const { available } = await SpeechRecognition.available();
-                if (available) {
-                    setIsListening(true);
-
-                    try {
-                        await SpeechRecognition.start({
-                            language: i18n.language === 'hi' ? 'hi-IN' : 'en-US',
-                            partialResults: true,
-                            popup: false,
-                        });
-                    } catch (startError) {
-                        console.warn("Start failed, attempting restart:", startError);
-                        // If start failed (e.g. already running), try to stop and start again
-                        try {
-                            await SpeechRecognition.stop();
-                        } catch (ignore) { }
-
-                        await SpeechRecognition.start({
-                            language: i18n.language === 'hi' ? 'hi-IN' : 'en-US',
-                            partialResults: true,
-                            popup: false,
-                        });
-                    }
-                } else {
-                    console.error("Speech recognition not available");
-                    setIsListening(false);
-                }
-            } catch (e) {
-                console.error("Native speech error:", e);
-                setIsListening(false);
-            }
-        } else {
-            recognitionRef.current?.start();
-        }
-    };
-
-    const stopListening = async () => {
-        if (silenceTimer.current) clearTimeout(silenceTimer.current);
-        if (Capacitor.isNativePlatform()) {
-            try {
-                await SpeechRecognition.stop();
-            } catch (e) {
-                // ignore stop errors
-            }
-            setIsListening(false);
-        } else {
-            recognitionRef.current?.stop();
         }
     };
 
     const toggleLiveMode = () => {
         if (isLiveMode) {
             setIsLiveMode(false);
-            stopListening();
-            if (isSpeaking) {
-                audioRef.current.pause();
-                setIsSpeaking(false);
-            }
+            cancelOutput();
         } else {
             setIsLiveMode(true);
             startListening();
         }
     };
 
-    const toggleListening = () => {
-        if (isListening) {
-            stopListening();
-        } else {
-            startListening();
-        }
-    };
+    // Derived UI states
+    const isListening = voiceState === VoiceState.LISTENING;
 
     return (
         <div className="flex flex-col h-full bg-background md:rounded-2xl md:shadow-xl md:border border-border overflow-hidden relative font-sans">
@@ -359,11 +201,15 @@ const ChatInterface = ({ messages, setMessages }) => {
                         {/* Status Text */}
                         <div className="absolute top-1/4 text-center space-y-2 animate-in slide-in-from-bottom-4 duration-700 w-full">
                             <h2 className="text-2xl md:text-3xl font-semibold text-foreground tracking-tight">
-                                {isLoading ? t('thinking') : isSpeaking ? t('speaking') : t('listening')}
+                                {voiceState === VoiceState.PROCESSING || isLoading ? t('thinking') :
+                                    voiceState === VoiceState.SPEAKING ? t('speaking') :
+                                        voiceState === VoiceState.LISTENING ? t('listening') : t('online')}
                             </h2>
                             {/* Show live transcript or response preview */}
                             <p className="text-muted-foreground text-lg max-w-md mx-auto line-clamp-3">
-                                {isLoading ? "..." : (input || (messages[messages.length - 1]?.role === 'assistant' ? messages[messages.length - 1].content : ""))}
+                                {voiceState === VoiceState.LISTENING ? transcript :
+                                    isLoading ? "..." :
+                                        (messages[messages.length - 1]?.role === 'assistant' ? messages[messages.length - 1].content : "")}
                             </p>
                         </div>
 
@@ -372,23 +218,23 @@ const ChatInterface = ({ messages, setMessages }) => {
                             <div
                                 className={cn(
                                     "absolute w-32 h-32 rounded-full blur-3xl transition-all duration-300",
-                                    isListening ? "bg-primary/60 scale-110" : "bg-secondary/40",
-                                    isLoading && "bg-purple-500/60 animate-pulse",
-                                    isSpeaking && "bg-green-500/60 scale-125"
+                                    voiceState === VoiceState.LISTENING ? "bg-primary/60 scale-110" : "bg-secondary/40",
+                                    (voiceState === VoiceState.PROCESSING || isLoading) && "bg-purple-500/60 animate-pulse",
+                                    voiceState === VoiceState.SPEAKING && "bg-green-500/60 scale-125"
                                 )}
                             />
                             <div className={cn(
                                 "absolute inset-0 border-2 rounded-full opacity-20 transition-all duration-1000",
-                                isListening ? "border-primary animate-ping-slow" : "border-muted-foreground scale-90"
+                                voiceState === VoiceState.LISTENING ? "border-primary animate-ping-slow" : "border-muted-foreground scale-90"
                             )} />
 
                             <div className={cn(
                                 "relative z-10 w-24 h-24 rounded-full flex items-center justify-center transition-transform duration-500 bg-background/50 backdrop-blur-sm border border-white/10",
-                                isListening ? "scale-110" : "scale-100"
+                                voiceState === VoiceState.LISTENING ? "scale-110" : "scale-100"
                             )}>
-                                {isLoading ? (
+                                {(voiceState === VoiceState.PROCESSING || isLoading) ? (
                                     <Loader2 size={48} className="text-primary animate-spin" />
-                                ) : isSpeaking ? (
+                                ) : voiceState === VoiceState.SPEAKING ? (
                                     <Volume2 size={48} className="text-green-500 animate-pulse" />
                                 ) : (
                                     <Mic size={48} className={cn("text-foreground", isListening && "text-primary")} />
@@ -526,6 +372,27 @@ const ChatInterface = ({ messages, setMessages }) => {
                     >
                         <Send size={20} />
                     </button>
+
+                    {!isLiveMode && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (voiceState === VoiceState.LISTENING) {
+                                    stopListening();
+                                } else {
+                                    startListening();
+                                }
+                            }}
+                            className={cn(
+                                "p-3.5 rounded-2xl transition-all shadow-sm active:scale-95",
+                                voiceState === VoiceState.LISTENING
+                                    ? "bg-red-500 text-white animate-pulse"
+                                    : "bg-muted text-foreground hover:bg-muted/80"
+                            )}
+                        >
+                            <Mic size={20} />
+                        </button>
+                    )}
                 </form>
             </div>
         </div>

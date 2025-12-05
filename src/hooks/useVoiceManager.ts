@@ -1,0 +1,216 @@
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { SpeechRecognition } from '@capacitor-community/speech-recognition';
+import { TextToSpeech } from '@capacitor-community/text-to-speech';
+import { Capacitor } from '@capacitor/core';
+
+export enum VoiceState {
+    IDLE = 'IDLE',
+    LISTENING = 'LISTENING',
+    PROCESSING = 'PROCESSING',
+    SPEAKING = 'SPEAKING'
+}
+
+interface UseVoiceManagerProps {
+    language?: string;
+    onInputComplete?: (text: string) => void;
+}
+
+export const useVoiceManager = ({ language = 'en-US', onInputComplete }: UseVoiceManagerProps = {}) => {
+    const [voiceState, setVoiceState] = useState<VoiceState>(VoiceState.IDLE);
+    const [transcript, setTranscript] = useState<string>('');
+    const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
+
+    const silenceTimer = useRef<any>(null);
+    const processTimer = useRef<any>(null);
+    // Ref to access current state in async callbacks
+    const stateRef = useRef({ voiceState, language, onInputComplete });
+
+    useEffect(() => {
+        stateRef.current = { voiceState, language, onInputComplete };
+    }, [voiceState, language, onInputComplete]);
+
+    const clearTimers = () => {
+        if (silenceTimer.current) clearTimeout(silenceTimer.current);
+        if (processTimer.current) clearTimeout(processTimer.current);
+    };
+
+    const checkPermissions = async () => {
+        if (!Capacitor.isNativePlatform()) return true;
+        try {
+            const perm = await SpeechRecognition.checkPermissions();
+            if (perm.speechRecognition !== 'granted') {
+                await SpeechRecognition.requestPermissions();
+            }
+            return true;
+        } catch (e) {
+            console.error("Permission error:", e);
+            return false;
+        }
+    };
+
+    const stopListening = useCallback(async () => {
+        clearTimers();
+        if (Capacitor.isNativePlatform()) {
+            try {
+                await SpeechRecognition.stop();
+            } catch (e) {
+                // Ignore stop errors
+            }
+        }
+        setVoiceState(VoiceState.IDLE);
+    }, []);
+
+    const startListening = useCallback(async () => {
+        // Interruption logic: If currently speaking, stop TTS
+        if (stateRef.current.voiceState === VoiceState.SPEAKING) {
+            try {
+                await TextToSpeech.stop();
+            } catch (e) { console.error("Error stopping TTS:", e); }
+            setIsSpeaking(false);
+        }
+
+        clearTimers();
+        setTranscript('');
+
+        if (Capacitor.isNativePlatform()) {
+            const hasPerm = await checkPermissions();
+            if (!hasPerm) {
+                setVoiceState(VoiceState.IDLE);
+                return;
+            }
+
+            try {
+                // Ensure fresh start
+                try { await SpeechRecognition.stop(); } catch (e) { }
+
+                setVoiceState(VoiceState.LISTENING);
+
+                // Safety timeout: If no input at all for 8 seconds, go IDLE
+                silenceTimer.current = setTimeout(() => {
+                    console.log("Silence timeout - stopping listener");
+                    stopListening();
+                }, 8000);
+
+                await SpeechRecognition.start({
+                    language: stateRef.current.language,
+                    partialResults: true,
+                    popup: false,
+                });
+
+            } catch (e) {
+                console.error("Start listening failed:", e);
+                setVoiceState(VoiceState.IDLE);
+            }
+        } else {
+            console.warn("Web Speech API not fully implemented in this native-focused hook");
+            setVoiceState(VoiceState.IDLE);
+        }
+    }, [stopListening]);
+
+    const speakResponse = useCallback(async (text: string) => {
+        if (!text) {
+            // If no text, just restart loop immediately?
+            setTimeout(() => startListening(), 500);
+            return;
+        }
+
+        // Ensure we aren't listening
+        clearTimers();
+        try { await SpeechRecognition.stop(); } catch (e) { }
+
+        setVoiceState(VoiceState.SPEAKING);
+        setIsSpeaking(true);
+
+        try {
+            if (Capacitor.isNativePlatform()) {
+                await TextToSpeech.speak({
+                    text,
+                    lang: stateRef.current.language,
+                    rate: 1.0,
+                    pitch: 1.0,
+                    category: 'ambient',
+                });
+                // When promise resolves, TTS is done
+                handleTTSComplete();
+            } else {
+                // Web fallback (using browser speech synthesis)
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = stateRef.current.language;
+                utterance.onend = () => handleTTSComplete();
+                window.speechSynthesis.speak(utterance);
+            }
+        } catch (e) {
+            console.error("TTS Error:", e);
+            handleTTSComplete();
+        }
+    }, [startListening]);
+
+    const handleTTSComplete = useCallback(() => {
+        setIsSpeaking(false);
+        // CRITICAL: 500ms delay to release audio focus before listening
+        setTimeout(() => {
+            startListening();
+        }, 500);
+    }, [startListening]);
+
+    const cancelOutput = useCallback(async () => {
+        clearTimers();
+        if (Capacitor.isNativePlatform()) {
+            try { await TextToSpeech.stop(); } catch (e) { }
+            try { await SpeechRecognition.stop(); } catch (e) { }
+        } else {
+            window.speechSynthesis.cancel();
+        }
+        setIsSpeaking(false);
+        setVoiceState(VoiceState.IDLE);
+    }, []);
+
+    // Setup Listeners
+    useEffect(() => {
+        let listenerHandle: any = null;
+
+        if (Capacitor.isNativePlatform()) {
+            SpeechRecognition.addListener('partialResults', (data: any) => {
+                const results = data.matches;
+                if (results && results.length > 0) {
+                    const text = results[0];
+                    setTranscript(text);
+
+                    // User is speaking, so reset silence timer
+                    if (silenceTimer.current) clearTimeout(silenceTimer.current);
+
+                    // Set/Reset "Done Speaking" timer
+                    // This creates the "Safety Loop" - waiting for pause in speech
+                    if (processTimer.current) clearTimeout(processTimer.current);
+
+                    processTimer.current = setTimeout(() => {
+                        // Consolidate input
+                        setVoiceState(VoiceState.PROCESSING);
+                        if (stateRef.current.onInputComplete) {
+                            stateRef.current.onInputComplete(text);
+                        }
+                    }, 1500); // 1.5s pause = done speaking
+                }
+            }).then(handle => {
+                listenerHandle = handle;
+            });
+
+            return () => {
+                if (listenerHandle) {
+                    listenerHandle.remove();
+                }
+                SpeechRecognition.removeAllListeners();
+            };
+        }
+    }, []);
+
+    return {
+        voiceState,
+        transcript,
+        isSpeaking,
+        startListening,
+        stopListening,
+        speakResponse,
+        cancelOutput
+    };
+};

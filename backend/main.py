@@ -26,7 +26,7 @@ app.include_router(sales.router)
 app.include_router(chat.router)
 app.include_router(mandi.router)
 app.include_router(vision.router)
-app.include_router(vision.router)
+
 app.include_router(live_chat.router)
 app.include_router(tts.router)
 
