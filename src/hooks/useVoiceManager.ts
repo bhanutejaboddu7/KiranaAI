@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { SpeechRecognition } from '@capacitor-community/speech-recognition';
 import { TextToSpeech } from '@capacitor-community/text-to-speech';
 import { Capacitor } from '@capacitor/core';
+import { getTTS } from '../services/api';
 
 export enum VoiceState {
     IDLE = 'IDLE',
@@ -179,6 +180,17 @@ export const useVoiceManager = ({ language = 'en-US', onInputComplete }: UseVoic
         }
     }, [stopListening]);
 
+    const cancelOutput = useCallback(async () => {
+        clearTimers();
+        if (Capacitor.isNativePlatform()) {
+            try { await TextToSpeech.stop(); } catch (e) { }
+            try { await SpeechRecognition.stop(); } catch (e) { }
+        }
+        window.speechSynthesis.cancel();
+        setIsSpeaking(false);
+        setVoiceState(VoiceState.IDLE);
+    }, []);
+
     const speakResponse = useCallback(async (text: string) => {
         if (!text) {
             setTimeout(() => startListening(), 500);
@@ -195,20 +207,15 @@ export const useVoiceManager = ({ language = 'en-US', onInputComplete }: UseVoic
 
         const onComplete = () => {
             if (stateRef.current.voiceState !== VoiceState.SPEAKING) return;
-
             console.log("TTS Complete - Triggering Restart");
             setIsSpeaking(false);
-
-            // Critical: Force restart listener after small delay
-            // We use a timestamp check or just force it.
             setTimeout(() => {
                 console.log("Auto-restarting listener...");
                 startListening();
             }, 500);
         };
 
-        // SAFETY FAILSAFE: If TTS hangs successfully but doesn't fire onEnd, force complete after N seconds
-        // Estimate 150 words/min ~ 2.5 words/sec. 
+        // SAFETY: Global Failsafe
         const estimatedDuration = Math.max(3000, (text.split(' ').length / 2) * 1000 + 2000);
         setTimeout(() => {
             if (stateRef.current.voiceState === VoiceState.SPEAKING) {
@@ -221,23 +228,19 @@ export const useVoiceManager = ({ language = 'en-US', onInputComplete }: UseVoic
             console.log("Falling back to Web Speech API...");
             try {
                 const utterance = new SpeechSynthesisUtterance(text);
-                // Strict Locale: No 'en-US' fallback if 'hi-IN' implies native
                 utterance.lang = stateRef.current.language;
                 utterance.rate = 1.0;
-
                 utterance.onend = () => onComplete();
                 utterance.onerror = (e) => {
                     console.error("Web Speech API Error:", e);
                     onComplete();
                 };
-
                 setTimeout(() => {
                     if (window.speechSynthesis.speaking) {
                         window.speechSynthesis.cancel();
                         onComplete();
                     }
                 }, 10000);
-
                 window.speechSynthesis.speak(utterance);
             } catch (e) {
                 console.error("Web Speech Fatal Error:", e);
@@ -245,24 +248,48 @@ export const useVoiceManager = ({ language = 'en-US', onInputComplete }: UseVoic
             }
         };
 
+        const playBackendTTS = async () => {
+            console.log(`[VoiceManager] Fetching Cloud TTS for ${stateRef.current.language}`);
+            try {
+                const audioBlob = await getTTS(text, stateRef.current.language);
+                const audioUrl = URL.createObjectURL(audioBlob);
+                const audio = new Audio(audioUrl);
+
+                audio.onended = () => {
+                    console.log("Cloud TTS Finished");
+                    onComplete();
+                    URL.revokeObjectURL(audioUrl);
+                };
+
+                audio.onerror = (e) => {
+                    console.error("Cloud TTS Playback Error", e);
+                    attemptWebSpeech(); // Last resort
+                };
+
+                await audio.play();
+            } catch (err) {
+                console.error("Cloud TTS Fetch Error:", err);
+                attemptWebSpeech(); // Last resort
+            }
+        };
+
         if (Capacitor.isNativePlatform()) {
             try {
-                // 1. Check if the specific Indian locale is supported (e.g., 'ta-IN')
+                // 1. Check if Native supports this specific locale
                 const voices = await TextToSpeech.getSupportedLanguages();
                 const targetLang = stateRef.current.language;
-
-                // Note: voices.languages is an array of strings like ['en-US', 'hi-IN', ...]
-                const isSupported = voices.languages.some(l => l.replace('_', '-') === targetLang.replace('_', '-'));
+                // Loose match
+                const isSupported = voices.languages.some(l =>
+                    l.toLowerCase().includes(targetLang.split('-')[0].toLowerCase())
+                );
 
                 if (!isSupported) {
-                    console.warn(`[VoiceManager] Native TTS does not support ${targetLang}. Falling back to Web.`);
-                    attemptWebSpeech();
+                    console.warn(`[VoiceManager] Native TTS missing ${targetLang}. Using Cloud TTS.`);
+                    playBackendTTS();
                     return;
                 }
 
-                console.log(`[VoiceManager] Attempting Native TTS with locale: ${targetLang}`);
-
-                // 2. Speak without arbitrary timeout race (we rely on the global safeguard)
+                console.log(`[VoiceManager] Attempting Native TTS: ${targetLang}`);
                 await TextToSpeech.speak({
                     text,
                     lang: targetLang,
@@ -270,29 +297,16 @@ export const useVoiceManager = ({ language = 'en-US', onInputComplete }: UseVoic
                     pitch: 1.0,
                     category: 'ambient',
                 });
-
-                // 3. Success
                 onComplete();
 
             } catch (nativeErr) {
-                console.warn("Native TTS failed, trying Web Fallback", nativeErr);
-                attemptWebSpeech();
+                console.warn("Native TTS failed, switching to Cloud TTS", nativeErr);
+                playBackendTTS();
             }
         } else {
             attemptWebSpeech();
         }
     }, [startListening]);
-
-    const cancelOutput = useCallback(async () => {
-        clearTimers();
-        if (Capacitor.isNativePlatform()) {
-            try { await TextToSpeech.stop(); } catch (e) { }
-            try { await SpeechRecognition.stop(); } catch (e) { }
-        }
-        window.speechSynthesis.cancel();
-        setIsSpeaking(false);
-        setVoiceState(VoiceState.IDLE);
-    }, []);
 
     useEffect(() => {
         let listenerHandle: any = null;
