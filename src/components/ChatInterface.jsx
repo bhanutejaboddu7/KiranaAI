@@ -117,46 +117,73 @@ const ChatInterface = ({ messages, setMessages }) => {
 
     const playTTS = async (text, autoRestartListening = false) => {
         try {
+            // Indicate speaking immediately to reduce perceived latency
+            setIsSpeaking(true);
+
             // Optimize text for speech: Remove markdown tables and code blocks
-            // 1. Remove code blocks
             let speakableText = text.replace(/```[\s\S]*?```/g, '');
-            // 2. Remove tables (lines starting with |)
             speakableText = speakableText.replace(/^\|.*$/gm, '');
-            // 3. Remove table separators (lines with - and |)
             speakableText = speakableText.replace(/^[-| :]+$/gm, '');
-            // 4. Clean up extra whitespace
             speakableText = speakableText.replace(/\n+/g, ' ').trim();
 
-            // If text is too long, maybe just speak the first sentence?
-            // For now, let's just speak the cleaned text.
-            if (!speakableText) return; // Nothing to speak (e.g. only table)
+            if (!speakableText) {
+                setIsSpeaking(false);
+                if (autoRestartListening && isLiveModeRef.current) {
+                    setTimeout(startListening, 300);
+                }
+                return;
+            }
 
-            setIsSpeaking(true);
             const audioBlob = await getTTS(speakableText, i18n.language);
             const audioUrl = URL.createObjectURL(audioBlob);
 
             audioRef.current.src = audioUrl;
+
+            // Define onended handler *before* playing
             audioRef.current.onended = () => {
                 setIsSpeaking(false);
                 URL.revokeObjectURL(audioUrl);
-                if (autoRestartListening && isLiveMode) {
-                    setTimeout(() => startListening(), 500);
+
+                // Check Ref for accurate Live Mode status
+                if (autoRestartListening && isLiveModeRef.current) {
+                    console.log("Auto-restarting listener...");
+                    setTimeout(startListening, 300);
                 }
             };
-            audioRef.current.play();
+
+            // Handle playback errors
+            audioRef.current.onerror = () => {
+                console.error("Audio playback error");
+                setIsSpeaking(false);
+                if (autoRestartListening && isLiveModeRef.current) {
+                    setTimeout(startListening, 300);
+                }
+            };
+
+            await audioRef.current.play();
         } catch (error) {
             console.error("TTS Error:", error);
             setIsSpeaking(false);
+            // Even on error, try to restart listening if in live mode
+            if (autoRestartListening && isLiveModeRef.current) {
+                setTimeout(startListening, 300);
+            }
         }
     };
 
     const silenceTimer = useRef(null);
 
-    // Keep refs up to date for the listener
+    // Keep refs up to date
     const stateRef = useRef({ input, messages, i18n });
+    const isLiveModeRef = useRef(isLiveMode);
+
     useEffect(() => {
         stateRef.current = { input, messages, i18n };
     }, [input, messages, i18n]);
+
+    useEffect(() => {
+        isLiveModeRef.current = isLiveMode;
+    }, [isLiveMode]);
 
     // Setup Speech Recognition Listener ONCE
     useEffect(() => {
@@ -170,8 +197,6 @@ const ChatInterface = ({ messages, setMessages }) => {
                         // Auto-send after silence
                         if (silenceTimer.current) clearTimeout(silenceTimer.current);
                         silenceTimer.current = setTimeout(() => {
-                            // Use ref to access latest handleSend logic if needed, 
-                            // but simpler to just call handleSend with current refs
                             handleSend(null, transcript, 'voice');
                         }, 1500);
                     }
@@ -183,15 +208,19 @@ const ChatInterface = ({ messages, setMessages }) => {
                 if (silenceTimer.current) clearTimeout(silenceTimer.current);
             };
         }
-    }, []); // Empty dependency array = run once on mount
+    }, []);
 
     const startListening = async () => {
         if (Capacitor.isNativePlatform()) {
             try {
+                // Ensure we stop any existing session first to prevent "already running" errors
+                try {
+                    await SpeechRecognition.stop();
+                } catch (ignore) { }
+
                 const { available } = await SpeechRecognition.available();
                 if (available) {
                     setIsListening(true);
-                    // Just start, listener is already set up
                     await SpeechRecognition.start({
                         language: i18n.language === 'hi' ? 'hi-IN' : 'en-US',
                         partialResults: true,
@@ -210,7 +239,11 @@ const ChatInterface = ({ messages, setMessages }) => {
     const stopListening = async () => {
         if (silenceTimer.current) clearTimeout(silenceTimer.current);
         if (Capacitor.isNativePlatform()) {
-            await SpeechRecognition.stop();
+            try {
+                await SpeechRecognition.stop();
+            } catch (e) {
+                // ignore stop errors
+            }
             setIsListening(false);
         } else {
             recognitionRef.current?.stop();
